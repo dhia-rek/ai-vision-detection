@@ -64,4 +64,4 @@ MIT License - voir [LICENSE](LICENSE)
 
 ## 👨‍💻 Auteur
 
-Akram Ben Abdelkader - [@AkramKhattabi](https://github.com/AkramKhattabi)
+Akram KHATTABI - [@AkramKhattabi](https://github.com/AkramKhattabi)
