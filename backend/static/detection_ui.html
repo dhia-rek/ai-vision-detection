@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Vision - Détection en Temps Réel</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 1200px;
+            width: 100%;
+            padding: 40px;
+            animation: slideUp 0.5s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 28px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .upload-section {
+            margin-bottom: 40px;
+        }
+
+        .upload-box {
+            border: 3px dashed #667eea;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            background: #f8f9ff;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .upload-box:hover {
+            background: #f0f2ff;
+            border-color: #764ba2;
+            transform: translateY(-2px);
+        }
+
+        .upload-box.dragover {
+            background: #e8eaff;
+            border-color: #764ba2;
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .upload-text {
+            font-size: 16px;
+            color: #555;
+            margin-bottom: 8px;
+        }
+
+        .upload-hint {
+            font-size: 13px;
+            color: #999;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+            justify-content: center;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .results-section {
+            display: none;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .results-section.active {
+            display: block;
+        }
+
+        .results-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 900px) {
+            .results-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .result-item {
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            background: white;
+        }
+
+        .result-item h3 {
+            padding: 16px;
+            background: #f8f9ff;
+            color: #667eea;
+            font-size: 14px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .result-image {
+            width: 100%;
+            height: auto;
+            display: block;
+            max-height: 500px;
+            object-fit: contain;
+            background: #f0f2ff;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #e0e4ff;
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .error-message {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            padding: 16px;
+            color: #dc2626;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .loading-message {
+            text-align: center;
+            padding: 20px;
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .reset-button {
+            width: 100%;
+            padding: 12px;
+            background: #f3f4f6;
+            color: #667eea;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .reset-button:hover {
+            background: #667eea;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 AI Vision Detection</h1>
+
+        <div class="upload-section">
+            <div class="upload-box" id="uploadBox">
+                <div class="upload-icon">📸</div>
+                <div class="upload-text">Drag and drop your image here</div>
+                <div class="upload-hint">or click to select a file</div>
+                <input type="file" id="fileInput" accept="image/*">
+            </div>
+        </div>
+
+        <div class="error-message" id="errorMessage"></div>
+
+        <div class="loading-message" id="loadingMessage" style="display: none;">
+            <div class="spinner"></div>
+            Processing your image...
+        </div>
+
+        <div class="results-section" id="resultsSection">
+            <div class="stats-grid" id="statsGrid"></div>
+            <div class="results-container" id="resultsContainer"></div>
+            <button class="reset-button" id="resetButton">Upload Another Image</button>
+        </div>
+    </div>
+
+    <script>
+        const uploadBox = document.getElementById('uploadBox');
+        const fileInput = document.getElementById('fileInput');
+        const loadingMessage = document.getElementById('loadingMessage');
+        const resultsSection = document.getElementById('resultsSection');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const statsGrid = document.getElementById('statsGrid');
+        const errorMessage = document.getElementById('errorMessage');
+        const resetButton = document.getElementById('resetButton');
+
+        // Upload box interactions
+        uploadBox.addEventListener('click', () => fileInput.click());
+
+        uploadBox.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadBox.classList.add('dragover');
+        });
+
+        uploadBox.addEventListener('dragleave', () => {
+            uploadBox.classList.remove('dragover');
+        });
+
+        uploadBox.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadBox.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        async function handleFile(file) {
+            // Validate file
+            if (!file.type.startsWith('image/')) {
+                showError('Please select an image file');
+                return;
+            }
+
+            if (file.size > 50 * 1024 * 1024) { // 50MB limit
+                showError('File size must be less than 50MB');
+                return;
+            }
+
+            // Clear previous errors
+            errorMessage.classList.remove('show');
+
+            // Show loading
+            loadingMessage.style.display = 'block';
+            resultsSection.classList.remove('active');
+
+            try {
+                // Create FormData
+                const formData = new FormData();
+                formData.append('file', file);
+
+                // Send to backend
+                const response = await fetch('http://localhost:8000/detect/', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                displayResults(data, file.name);
+            } catch (error) {
+                console.error('Error:', error);
+                showError(`Error processing image: ${error.message}`);
+            } finally {
+                loadingMessage.style.display = 'none';
+            }
+        }
+
+        function displayResults(data, originalFileName) {
+            const resultImagePath = data.result_image;
+
+            // Build full URL for the result image
+            const resultImageUrl = `http://localhost:8000/${resultImagePath}`;
+
+            // Extract filename from path for display
+            const resultFileName = resultImagePath.split('/').pop();
+
+            // Display results
+            resultsContainer.innerHTML = `
+                <div class="result-item">
+                    <h3>Original Image</h3>
+                    <img src="${URL.createObjectURL(fileInput.files[0])}" class="result-image" alt="Original image">
+                </div>
+                <div class="result-item">
+                    <h3>Detection Result</h3>
+                    <img src="${resultImageUrl}" class="result-image" alt="Detection result" onerror="console.log('Image failed to load from:', this.src)">
+                </div>
+            `;
+
+            // Display stats (you can customize based on your actual response)
+            statsGrid.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-label">Image Analyzed</div>
+                    <div class="stat-value">✓</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Status</div>
+                    <div class="stat-value">Complete</div>
+                </div>
+            `;
+
+            resultsSection.classList.add('active');
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.add('show');
+        }
+
+        resetButton.addEventListener('click', () => {
+            fileInput.value = '';
+            resultsSection.classList.remove('active');
+            errorMessage.classList.remove('show');
+            uploadBox.classList.remove('dragover');
+        });
+    </script>
+</body>
+</html>
