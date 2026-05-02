@@ -58,10 +58,6 @@ ai-vision-detection/
 - **Frontend** : HTML, CSS, JavaScript
 - **Server** : Uvicorn
 
-## 📝 License
-
-MIT License - voir [LICENSE](LICENSE)
-
 ## 👨‍💻 Auteur
 
 Akram KHATTABI - [@AkramKhattabi](https://github.com/AkramKhattabi)
