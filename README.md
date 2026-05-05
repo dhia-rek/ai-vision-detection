@@ -1,4 +1,4 @@
-# 🎯 AI Vision Detection
+# 🎯 AI Vision OBJECT Detection
 
 Système de détection d'objets en temps réel avec YOLO et interface web moderne.
 
