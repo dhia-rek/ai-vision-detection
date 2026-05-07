@@ -3,13 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Vision - Détection en Temps Réel</title>
+    <title>AI Vision - Détection en Temps Réel (CAM)</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -25,190 +21,119 @@
             background: white;
             border-radius: 16px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-width: 1200px;
+            max-width: 1100px;
             width: 100%;
-            padding: 40px;
-            animation: slideUp 0.5s ease-out;
+            padding: 28px;
+            animation: slideUp 0.3s ease-out;
         }
 
         @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         h1 {
             text-align: center;
             color: #333;
-            margin-bottom: 30px;
-            font-size: 28px;
+            margin-bottom: 18px;
+            font-size: 26px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
 
-        .upload-section {
-            margin-bottom: 40px;
+        .top-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+            margin-bottom: 18px;
         }
 
-        .upload-box {
-            border: 3px dashed #667eea;
+        @media (max-width: 900px) {
+            .top-row { grid-template-columns: 1fr; }
+        }
+
+        .panel {
             border-radius: 12px;
-            padding: 40px;
-            text-align: center;
+            border: 1px solid #e0e4ff;
             background: #f8f9ff;
-            transition: all 0.3s ease;
-            cursor: pointer;
+            overflow: hidden;
         }
 
-        .upload-box:hover {
-            background: #f0f2ff;
-            border-color: #764ba2;
-            transform: translateY(-2px);
-        }
-
-        .upload-box.dragover {
-            background: #e8eaff;
-            border-color: #764ba2;
-            transform: scale(1.02);
-        }
-
-        .upload-icon {
-            font-size: 48px;
-            margin-bottom: 16px;
-        }
-
-        .upload-text {
-            font-size: 16px;
-            color: #555;
-            margin-bottom: 8px;
-        }
-
-        .upload-hint {
-            font-size: 13px;
-            color: #999;
-        }
-
-        input[type="file"] {
-            display: none;
-        }
-
-        .button-group {
+        .panel-header {
+            padding: 12px 14px;
+            background: #eef1ff;
+            color: #667eea;
+            font-weight: 700;
+            font-size: 14px;
+            border-bottom: 1px solid #e0e4ff;
             display: flex;
+            align-items: center;
+            justify-content: space-between;
             gap: 12px;
-            margin-top: 20px;
+        }
+
+        .media {
+            width: 100%;
+            display: block;
+            background: #f0f2ff;
+            object-fit: contain;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
             justify-content: center;
+            margin: 14px 0;
+            flex-wrap: wrap;
         }
 
         button {
-            padding: 12px 24px;
+            padding: 10px 16px;
             border: none;
-            border-radius: 8px;
+            border-radius: 10px;
             font-size: 14px;
-            font-weight: 600;
+            font-weight: 700;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: transform 0.15s ease;
         }
+
+        button:active { transform: scale(0.98); }
 
         .btn-primary {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
         }
 
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        .btn-primary:hover { box-shadow: 0 10px 20px rgba(102, 126, 234, 0.25); }
+
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #667eea;
+            border: 2px solid #667eea;
         }
 
-        .btn-primary:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
+        .btn-secondary:hover {
+            background: #667eea;
+            color: white;
         }
 
-        .spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255, 255, 255, 0.3);
-            border-top-color: white;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin-right: 8px;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .results-section {
-            display: none;
-            animation: fadeIn 0.5s ease-out;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        .results-section.active {
-            display: block;
-        }
-
-        .results-container {
+        .status-bar {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            margin-bottom: 30px;
+            gap: 12px;
+            margin-top: 12px;
         }
 
         @media (max-width: 900px) {
-            .results-container {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .result-item {
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            background: white;
-        }
-
-        .result-item h3 {
-            padding: 16px;
-            background: #f8f9ff;
-            color: #667eea;
-            font-size: 14px;
-            font-weight: 600;
-            margin: 0;
-        }
-
-        .result-image {
-            width: 100%;
-            height: auto;
-            display: block;
-            max-height: 500px;
-            object-fit: contain;
-            background: #f0f2ff;
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-            margin-bottom: 30px;
+            .status-bar { grid-template-columns: 1fr; }
         }
 
         .stat-card {
             background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
-            padding: 20px;
+            padding: 14px;
             border-radius: 12px;
             border: 1px solid #e0e4ff;
             text-align: center;
@@ -218,13 +143,13 @@
             font-size: 12px;
             color: #999;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 8px;
+            letter-spacing: 0.6px;
+            margin-bottom: 6px;
         }
 
         .stat-value {
-            font-size: 32px;
-            font-weight: bold;
+            font-size: 28px;
+            font-weight: 800;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -234,198 +159,253 @@
         .error-message {
             background: #fef2f2;
             border: 1px solid #fecaca;
-            border-radius: 8px;
-            padding: 16px;
+            border-radius: 10px;
+            padding: 12px 14px;
             color: #dc2626;
-            margin-bottom: 20px;
             display: none;
+            margin-top: 12px;
+            font-weight: 600;
         }
 
-        .error-message.show {
-            display: block;
-        }
+        .error-message.show { display: block; }
 
-        .loading-message {
+        .small {
+            font-size: 12px;
+            color: #666;
+            margin-top: 8px;
             text-align: center;
-            padding: 20px;
-            color: #667eea;
-            font-weight: 600;
         }
 
-        .reset-button {
-            width: 100%;
-            padding: 12px;
-            background: #f3f4f6;
-            color: #667eea;
-            border: 2px solid #667eea;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
+        .spinner {
+            display: none;
+            width: 18px;
+            height: 18px;
+            border: 3px solid rgba(255,255,255,0.35);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
         }
 
-        .reset-button:hover {
-            background: #667eea;
-            color: white;
-        }
+        .spinner.on { display: inline-block; }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .video-wrap, .img-wrap { padding: 10px; }
+        video { width: 100%; border-radius: 0; }
+        img { width: 100%; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🎯 AK AI Vision Detection</h1>
+<div class="container">
+    <h1>🎯 AI Vision Detection (CAM)</h1>
 
-        <div class="upload-section">
-            <div class="upload-box" id="uploadBox">
-                <div class="upload-icon">📸</div>
-                <div class="upload-text">Drag and drop your image here</div>
-                <div class="upload-hint">or click to select a file</div>
-                <input type="file" id="fileInput" accept="image/*">
-            </div>
-        </div>
-
-        <div class="error-message" id="errorMessage"></div>
-
-        <div class="loading-message" id="loadingMessage" style="display: none;">
-            <div class="spinner"></div>
-            Processing your image...
-        </div>
-
-        <div class="results-section" id="resultsSection">
-            <div class="stats-grid" id="statsGrid"></div>
-            <div class="results-container" id="resultsContainer"></div>
-            <button class="reset-button" id="resetButton">Upload Another Image</button>
+    <div class="controls">
+        <button id="startBtn" class="btn-primary">Start Camera</button>
+        <button id="stopBtn" class="btn-secondary" style="display:none;">Stop Camera</button>
+        <div style="display:flex;align-items:center;gap:10px;">
+            <span id="fpsLabel" style="font-weight:700;color:#667eea;">FPS: -</span>
+            <span class="spinner" id="busySpinner"></span>
         </div>
     </div>
 
-    <script>
-        const uploadBox = document.getElementById('uploadBox');
-        const fileInput = document.getElementById('fileInput');
-        const loadingMessage = document.getElementById('loadingMessage');
-        const resultsSection = document.getElementById('resultsSection');
-        const resultsContainer = document.getElementById('resultsContainer');
-        const statsGrid = document.getElementById('statsGrid');
-        const errorMessage = document.getElementById('errorMessage');
-        const resetButton = document.getElementById('resetButton');
+    <div class="top-row">
+        <div class="panel">
+            <div class="panel-header">
+                <span>Live Camera</span>
+            </div>
+            <div class="video-wrap">
+                <video id="video" class="media" autoplay playsinline muted></video>
+            </div>
+        </div>
 
-        // Upload box interactions
-        uploadBox.addEventListener('click', () => fileInput.click());
+        <div class="panel">
+            <div class="panel-header">
+                <span>Detection (Annotated)</span>
+                <span id="objectsBadge" style="font-size:12px;font-weight:800;color:#764ba2;">0 objects</span>
+            </div>
+            <div class="img-wrap">
+                <img id="resultImg" class="media" alt="Annotated frame" style="height:360px;" />
+            </div>
+        </div>
+    </div>
 
-        uploadBox.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadBox.classList.add('dragover');
-        });
+    <div class="status-bar">
+        <div class="stat-card">
+            <div class="stat-label">Status</div>
+            <div class="stat-value" id="statusValue">Idle</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Last Objects</div>
+            <div class="stat-value" id="countValue">0</div>
+        </div>
+    </div>
 
-        uploadBox.addEventListener('dragleave', () => {
-            uploadBox.classList.remove('dragover');
-        });
+    <div class="error-message" id="errorMessage"></div>
 
-        uploadBox.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadBox.classList.remove('dragover');
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                handleFile(files[0]);
-            }
-        });
+    <div class="small">If camera access is blocked, allow permissions in your browser settings.</div>
+</div>
 
-        fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) {
-                handleFile(e.target.files[0]);
-            }
-        });
+<script>
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const video = document.getElementById('video');
+    const resultImg = document.getElementById('resultImg');
 
-        async function handleFile(file) {
-            // Validate file
-            if (!file.type.startsWith('image/')) {
-                showError('Please select an image file');
-                return;
-            }
+    const errorMessage = document.getElementById('errorMessage');
+    const statusValue = document.getElementById('statusValue');
+    const countValue = document.getElementById('countValue');
+    const objectsBadge = document.getElementById('objectsBadge');
+    const fpsLabel = document.getElementById('fpsLabel');
+    const busySpinner = document.getElementById('busySpinner');
 
-            if (file.size > 50 * 1024 * 1024) { // 50MB limit
-                showError('File size must be less than 50MB');
-                return;
-            }
+    let stream = null;
+    let timer = null;
+    let busy = false;
+    let lastFrameTs = 0;
 
-            // Clear previous errors
-            errorMessage.classList.remove('show');
+    // Tune these for performance
+    const TARGET_FPS = 8; // lower = faster / less load
+    const FRAME_INTERVAL_MS = Math.floor(1000 / TARGET_FPS);
+    const JPEG_QUALITY = 75; // 60-85 typical
+    const MAX_WIDTH = 640; // resize before encoding
 
-            // Show loading
-            loadingMessage.style.display = 'block';
-            resultsSection.classList.remove('active');
+    function showError(msg) {
+        errorMessage.textContent = msg;
+        errorMessage.classList.add('show');
+    }
 
-            try {
-                // Create FormData
-                const formData = new FormData();
-                formData.append('file', file);
+    function clearError() {
+        errorMessage.textContent = '';
+        errorMessage.classList.remove('show');
+    }
 
-                // Send to backend
-                const response = await fetch('http://localhost:8000/detect/', {
-                    method: 'POST',
-                    body: formData,
-                });
+    async function startCamera() {
+        clearError();
 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+        try {
+            statusValue.textContent = 'Starting...';
+            startBtn.disabled = true;
+
+            stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            video.srcObject = stream;
+
+            // Wait until video dimensions are available
+            await new Promise((resolve) => {
+                if (video.videoWidth > 0) return resolve();
+                video.onloadedmetadata = () => resolve();
+            });
+
+            statusValue.textContent = 'Running';
+            startBtn.style.display = 'none';
+            stopBtn.style.display = 'inline-block';
+
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+            async function tick() {
+                if (!stream) return;
+
+                const now = performance.now();
+                if (lastFrameTs) {
+                    const dt = now - lastFrameTs;
+                    const fps = dt > 0 ? Math.round(1000 / dt) : 0;
+                    fpsLabel.textContent = `FPS: ${fps}`;
                 }
+                lastFrameTs = now;
 
-                const data = await response.json();
-                displayResults(data, file.name);
-            } catch (error) {
-                console.error('Error:', error);
-                showError(`Error processing image: ${error.message}`);
-            } finally {
-                loadingMessage.style.display = 'none';
+                if (busy) return;
+                busy = true;
+                busySpinner.classList.add('on');
+
+                try {
+                    // Resize while keeping aspect ratio
+                    const vw = video.videoWidth;
+                    const vh = video.videoHeight;
+                    let w = vw, h = vh;
+                    if (w > MAX_WIDTH) {
+                        const scale = MAX_WIDTH / w;
+                        w = MAX_WIDTH;
+                        h = Math.round(h * scale);
+                    }
+
+                    canvas.width = w;
+                    canvas.height = h;
+                    ctx.drawImage(video, 0, 0, w, h);
+
+                    const blob = await new Promise((resolve) => {
+                        canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY / 100);
+                    });
+
+                    if (!blob) throw new Error('Could not encode frame');
+
+                    const formData = new FormData();
+                    formData.append('frame', blob, 'frame.jpg');
+
+                    const res = await fetch('/detect/frame', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!res.ok) {
+                        const t = await res.text().catch(() => '');
+                        throw new Error(`Backend error: ${res.status} ${t}`);
+                    }
+
+                    const total = res.headers.get('X-Total-Detections');
+                    const totalNum = total ? parseInt(total, 10) : 0;
+                    countValue.textContent = String(totalNum);
+                    objectsBadge.textContent = `${totalNum} objects`;
+
+                    const annotatedBlob = await res.blob();
+                    const url = URL.createObjectURL(annotatedBlob);
+                    resultImg.src = url;
+
+                    // Revoke old object URL after next paint
+                    setTimeout(() => URL.revokeObjectURL(url), 2000);
+
+                } catch (err) {
+                    showError(err.message || String(err));
+                    statusValue.textContent = 'Error';
+                } finally {
+                    busy = false;
+                    busySpinner.classList.remove('on');
+                }
             }
+
+            timer = setInterval(tick, FRAME_INTERVAL_MS);
+
+        } catch (err) {
+            showError(err.message || String(err));
+            statusValue.textContent = 'Error';
+            startBtn.disabled = false;
+            startBtn.style.display = 'inline-block';
+            stopBtn.style.display = 'none';
+        }
+    }
+
+    function stopCamera() {
+        clearError();
+
+        if (timer) {
+            clearInterval(timer);
+            timer = null;
         }
 
-        function displayResults(data, originalFileName) {
-            const resultImagePath = data.result_image;
-
-            // Build full URL for the result image
-            const resultImageUrl = `http://localhost:8000/${resultImagePath}`;
-
-            // Extract filename from path for display
-            const resultFileName = resultImagePath.split('/').pop();
-
-            // Display results
-            resultsContainer.innerHTML = `
-                <div class="result-item">
-                    <h3>Original Image</h3>
-                    <img src="${URL.createObjectURL(fileInput.files[0])}" class="result-image" alt="Original image">
-                </div>
-                <div class="result-item">
-                    <h3>Detection Result</h3>
-                    <img src="${resultImageUrl}" class="result-image" alt="Detection result" onerror="console.log('Image failed to load from:', this.src)">
-                </div>
-            `;
-
-            // Display stats (you can customize based on your actual response)
-            statsGrid.innerHTML = `
-                <div class="stat-card">
-                    <div class="stat-label">Image Analyzed</div>
-                    <div class="stat-value">✓</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Status</div>
-                    <div class="stat-value">Complete</div>
-                </div>
-            `;
-
-            resultsSection.classList.add('active');
+        if (stream) {
+            stream.getTracks().forEach(t => t.stop());
+            stream = null;
         }
 
-        function showError(message) {
-            errorMessage.textContent = message;
-            errorMessage.classList.add('show');
-        }
+        statusValue.textContent = 'Stopped';
+        startBtn.disabled = false;
+        startBtn.style.display = 'inline-block';
+        stopBtn.style.display = 'none';
+        fpsLabel.textContent = 'FPS: -';
+    }
 
-        resetButton.addEventListener('click', () => {
-            fileInput.value = '';
-            resultsSection.classList.remove('active');
-            errorMessage.classList.remove('show');
-            uploadBox.classList.remove('dragover');
-        });
-    </script>
+    startBtn.addEventListener('click', startCamera);
+    stopBtn.addEventListener('click', stopCamera);
+</script>
 </body>
 </html>
-x`
+
