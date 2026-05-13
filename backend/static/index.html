@@ -200,15 +200,30 @@
     <h1>🎯 AI Vision Detection (CAM)</h1>
 
     <div class="controls">
-        <button id="startBtn" class="btn-primary">Start Camera</button>
-        <button id="stopBtn" class="btn-secondary" style="display:none;">Stop Camera</button>
-        <div style="display:flex;align-items:center;gap:10px;">
-            <span id="fpsLabel" style="font-weight:700;color:#667eea;">FPS: -</span>
-            <span class="spinner" id="busySpinner"></span>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;align-items:center;width:100%">
+            <button id="webcamModeBtn" class="btn-primary">Webcam (Live)</button>
+            <button id="uploadModeBtn" class="btn-secondary">Upload Image</button>
+        </div>
+
+        <div style="height:12px"></div>
+
+        <div id="webcamControls" style="display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;width:100%">
+            <button id="startBtn" class="btn-primary">Start Camera</button>
+            <button id="stopBtn" class="btn-secondary" style="display:none;">Stop Camera</button>
+            <div style="display:flex;align-items:center;gap:10px;">
+                <span id="fpsLabel" style="font-weight:700;color:#667eea;">FPS: -</span>
+                <span class="spinner" id="busySpinner"></span>
+            </div>
+        </div>
+
+        <div id="uploadControls" style="display:none;width:100%">
+            <div class="button-group" style="justify-content:center">
+                <span class="small" style="margin-top:0">Drag & drop below or click to select an image</span>
+            </div>
         </div>
     </div>
 
-    <div class="top-row">
+    <div id="webcamMode" class="top-row">
         <div class="panel">
             <div class="panel-header">
                 <span>Live Camera</span>
@@ -221,10 +236,47 @@
         <div class="panel">
             <div class="panel-header">
                 <span>Detection (Annotated)</span>
-                <span id="objectsBadge" style="font-size:12px;font-weight:800;color:#764ba2;">0 objects</span>
+                <span id="objectsBadgeWebcam" style="font-size:12px;font-weight:800;color:#764ba2;">0 objects</span>
             </div>
             <div class="img-wrap">
-                <img id="resultImg" class="media" alt="Annotated frame" style="height:360px;" />
+                <img id="resultImgWebcam" class="media" alt="Annotated frame" style="height:360px;" />
+            </div>
+        </div>
+    </div>
+
+    <div id="uploadMode" style="display:none;">
+        <div class="panel" style="margin-bottom:18px;">
+            <div class="panel-header">
+                <span>Upload Image</span>
+            </div>
+            <div style="padding:16px;">
+                <div id="uploadBox" class="upload-box" style="border:3px dashed #667eea;border-radius:12px;padding:28px;text-align:center;background:#f8f9ff;cursor:pointer;">
+                    <div class="upload-icon" style="font-size:38px;margin-bottom:10px;">📸</div>
+                    <div class="upload-text" style="font-size:15px;color:#555;margin-bottom:6px;">Drag and drop your image here</div>
+                    <div class="upload-hint" style="font-size:13px;color:#999;">or click to select a file</div>
+                    <input type="file" id="fileInput" accept="image/*" />
+                </div>
+            </div>
+        </div>
+
+        <div class="top-row">
+            <div class="panel">
+                <div class="panel-header">
+                    <span>Original</span>
+                </div>
+                <div class="img-wrap">
+                    <img id="originalImg" class="media" alt="Original image" style="height:360px;" />
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <span>Detection (Annotated)</span>
+                    <span id="objectsBadgeUpload" style="font-size:12px;font-weight:800;color:#764ba2;">0 objects</span>
+                </div>
+                <div class="img-wrap">
+                    <img id="resultImgUpload" class="media" alt="Detection result" style="height:360px;" />
+                </div>
             </div>
         </div>
     </div>
@@ -242,26 +294,45 @@
 
     <div class="error-message" id="errorMessage"></div>
 
-    <div class="small">If camera access is blocked, allow permissions in your browser settings.</div>
+    <div class="small" id="cameraHint">If camera access is blocked, allow permissions in your browser settings.</div>
+    <div class="small" id="uploadHint" style="display:none;">Uploads are processed and the annotated result is displayed on the right.</div>
 </div>
 
 <script>
     const startBtn = document.getElementById('startBtn');
     const stopBtn = document.getElementById('stopBtn');
     const video = document.getElementById('video');
-    const resultImg = document.getElementById('resultImg');
+    const resultImgWebcam = document.getElementById('resultImgWebcam');
+    const resultImgUpload = document.getElementById('resultImgUpload');
+
+    const originalImg = document.getElementById('originalImg');
 
     const errorMessage = document.getElementById('errorMessage');
     const statusValue = document.getElementById('statusValue');
     const countValue = document.getElementById('countValue');
-    const objectsBadge = document.getElementById('objectsBadge');
+    const objectsBadgeWebcam = document.getElementById('objectsBadgeWebcam');
+    const objectsBadgeUpload = document.getElementById('objectsBadgeUpload');
+
     const fpsLabel = document.getElementById('fpsLabel');
     const busySpinner = document.getElementById('busySpinner');
+
+    const webcamModeBtn = document.getElementById('webcamModeBtn');
+    const uploadModeBtn = document.getElementById('uploadModeBtn');
+    const webcamMode = document.getElementById('webcamMode');
+    const uploadMode = document.getElementById('uploadMode');
+    const cameraHint = document.getElementById('cameraHint');
+    const uploadHint = document.getElementById('uploadHint');
+
+    const uploadBox = document.getElementById('uploadBox');
+    const fileInput = document.getElementById('fileInput');
 
     let stream = null;
     let timer = null;
     let busy = false;
     let lastFrameTs = 0;
+
+    let currentMode = 'webcam';
+
 
     // Tune these for performance
     const TARGET_FPS = 8; // lower = faster / less load
@@ -354,11 +425,11 @@
                     const total = res.headers.get('X-Total-Detections');
                     const totalNum = total ? parseInt(total, 10) : 0;
                     countValue.textContent = String(totalNum);
-                    objectsBadge.textContent = `${totalNum} objects`;
+                    objectsBadgeWebcam.textContent = `${totalNum} objects`;
 
                     const annotatedBlob = await res.blob();
                     const url = URL.createObjectURL(annotatedBlob);
-                    resultImg.src = url;
+                    resultImgWebcam.src = url;
 
                     // Revoke old object URL after next paint
                     setTimeout(() => URL.revokeObjectURL(url), 2000);
@@ -403,9 +474,144 @@
         fpsLabel.textContent = 'FPS: -';
     }
 
+    async function showUploadError(msg) {
+        showError(msg);
+        statusValue.textContent = 'Error';
+    }
+
+    function setMode(mode) {
+        currentMode = mode;
+        clearError();
+
+        if (mode === 'webcam') {
+            uploadMode.style.display = 'none';
+            webcamMode.style.display = 'grid';
+            webcamModeBtn.className = 'btn-primary';
+            uploadModeBtn.className = 'btn-secondary';
+
+            cameraHint.style.display = 'block';
+            uploadHint.style.display = 'none';
+            fpsLabel.textContent = 'FPS: -';
+
+            // Reset upload-specific UI
+            if (originalImg) originalImg.style.display = '';
+        } else {
+            // Stop camera to reduce CPU if running
+            if (timer || stream) stopCamera();
+
+            webcamMode.style.display = 'none';
+            uploadMode.style.display = 'block';
+            webcamModeBtn.className = 'btn-secondary';
+            uploadModeBtn.className = 'btn-primary';
+
+            cameraHint.style.display = 'none';
+            uploadHint.style.display = 'block';
+            statusValue.textContent = 'Idle';
+        }
+    }
+
+
+    function showUploadLoading(isLoading) {
+        // Reuse busySpinner if desired, but keep UI simple
+        if (isLoading) {
+            statusValue.textContent = 'Processing...';
+            startBtn.disabled = true;
+            stopBtn.disabled = true;
+            busySpinner.classList.add('on');
+        } else {
+            busySpinner.classList.remove('on');
+            startBtn.disabled = false;
+            stopBtn.disabled = false;
+        }
+    }
+
+    uploadBox.addEventListener('click', () => fileInput.click());
+
+    uploadBox.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadBox.style.borderColor = '#764ba2';
+        uploadBox.style.background = '#e8eaff';
+    });
+
+    uploadBox.addEventListener('dragleave', () => {
+        uploadBox.style.borderColor = '#667eea';
+        uploadBox.style.background = '#f8f9ff';
+    });
+
+    uploadBox.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadBox.style.borderColor = '#667eea';
+        uploadBox.style.background = '#f8f9ff';
+        const files = e.dataTransfer.files;
+        if (files && files.length > 0) {
+            handleUpload(files[0]);
+        }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+            handleUpload(e.target.files[0]);
+        }
+    });
+
+    async function handleUpload(file) {
+        clearError();
+
+        if (!file.type || !file.type.startsWith('image/')) {
+            showUploadError('Please select an image file');
+            return;
+        }
+
+        if (file.size > 50 * 1024 * 1024) {
+            showUploadError('File size must be less than 50MB');
+            return;
+        }
+
+        showUploadLoading(true);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            originalImg.src = URL.createObjectURL(file);
+
+            const response = await fetch('/detect/', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                const t = await response.text().catch(() => '');
+                throw new Error(`Backend error: ${response.status} ${t}`);
+            }
+
+            const data = await response.json();
+
+            const resultImageUrl = `/${data.result_image}`;
+            resultImgUpload.src = resultImageUrl;
+
+            const totalNum = data.total_detections ?? 0;
+            countValue.textContent = String(totalNum);
+            objectsBadgeUpload.textContent = `${totalNum} objects`;
+            statusValue.textContent = 'Complete';
+
+        } catch (err) {
+            showUploadError(err.message || String(err));
+        } finally {
+            showUploadLoading(false);
+        }
+    }
+
+    webcamModeBtn.addEventListener('click', () => setMode('webcam'));
+    uploadModeBtn.addEventListener('click', () => setMode('upload'));
+
     startBtn.addEventListener('click', startCamera);
     stopBtn.addEventListener('click', stopCamera);
+
+    // Initial mode
+    setMode('webcam');
 </script>
 </body>
 </html>
+
 
