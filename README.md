@@ -58,6 +58,10 @@ ai-vision-detection/
 - **Frontend** : HTML, CSS, JavaScript
 - **Server** : Uvicorn
 
+## 👨‍💻 Snapshot
+<img width="1710" height="1107" alt="Webcam_live" src="(image removed)" />
+
+
 ## 👨‍💻 Auteur
 
 Akram KHATTABI - [@AkramKhattabi](https://github.com/AkramKhattabi)
