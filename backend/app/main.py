@@ -197,27 +197,38 @@ def create_app(detector: Detector | None = None) -> FastAPI:
             raise HTTPException(status_code=413, detail="Image too large")
         return decode_checked(raw)
 
-    def analyze(img: np.ndarray, key: str) -> dict:
+    def analyze(img: np.ndarray, key: str, annotate_image: bool = True) -> dict:
         """Run a mode on an image and build the ``/api/analyze`` response body.
 
+        Args:
+            img: BGR image.
+            key: Detector key from ``mode_key``.
+            annotate_image: If False, skip drawing and encoding the annotated JPEG and leave
+                ``result_image`` out (clients that draw the boxes themselves).
+
         Returns:
-            Dict with the annotated image as a base64 JPEG data URL, the detections,
-            their count, the model name and inference time in milliseconds.
+            Dict with the annotated image as a base64 JPEG data URL (unless skipped), the
+            detections, their count, the analysed image size in pixels (the coordinate space
+            of the boxes), the model name, the device and inference time in milliseconds.
         """
         det = get_detector(key)
         t0 = time.perf_counter()
         detections = det.detect(img)
         ms = (time.perf_counter() - t0) * 1000
-        jpeg = encode_jpeg(annotate(img, detections), quality=RESULT_JPEG_QUALITY)
-        return {
+        result = {
             "mode": key,
-            # Inline data URL: uploads and results are never written to disk.
-            "result_image": "data:image/jpeg;base64," + base64.b64encode(jpeg).decode(),
             "detections": [d.to_dict() for d in detections],
             "total_detections": len(detections),
+            "image_size": {"width": img.shape[1], "height": img.shape[0]},
             "model_used": det.name,
+            "device": getattr(det, "device", "cpu"),
             "inference_ms": round(ms, 1),
         }
+        if annotate_image:
+            jpeg = encode_jpeg(annotate(img, detections), quality=RESULT_JPEG_QUALITY)
+            # Inline data URL: uploads and results are never written to disk.
+            result["result_image"] = "data:image/jpeg;base64," + base64.b64encode(jpeg).decode()
+        return result
 
     def analyze_frame(img: np.ndarray, key: str, quality: int) -> Response:
         """Run a mode on a webcam frame and return the annotated JPEG.
@@ -350,12 +361,19 @@ def create_app(detector: Detector | None = None) -> FastAPI:
 
     @app.post("/api/analyze")
     async def api_analyze(
-        file: UploadFile = File(...), mode: str = Query("objects"), sign_mode: str = Query("spell")
+        file: UploadFile = File(...),
+        mode: str = Query("objects"),
+        sign_mode: str = Query("spell"),
+        annotate: bool = Query(True),
     ):
-        """Image in; JSON detections plus an annotated JPEG (data URL) out."""
+        """Image in; JSON detections plus an annotated JPEG (data URL) out.
+
+        Pass ``annotate=false`` to get the JSON only (no ``result_image``), which is faster
+        and what the web UI uses: it draws the boxes itself from ``detections``.
+        """
         key = mode_key(mode, sign_mode)
         img = await read_image(file)
-        return await run_in_threadpool(analyze, img, key)
+        return await run_in_threadpool(analyze, img, key, annotate)
 
     @app.post("/api/frame")
     async def api_frame(
@@ -400,7 +418,7 @@ def create_app(detector: Detector | None = None) -> FastAPI:
     @app.post("/detect/")
     async def detect(file: UploadFile = File(...)) -> dict:
         """Legacy alias of ``/api/analyze`` fixed to object detection."""
-        return await api_analyze(file, "objects", "spell")
+        return await api_analyze(file, "objects", "spell", True)
 
     @app.post("/detect/frame")
     async def detect_frame(frame: UploadFile = File(...), quality: int = Query(80, ge=10, le=95)) -> Response:
@@ -427,13 +445,18 @@ def create_app(detector: Detector | None = None) -> FastAPI:
         return FileResponse(SAMPLES_DIR / group / name)
 
     @app.post("/demo/analyze/{group}/{name}")
-    async def demo_analyze(group: str, name: str, mode: str | None = None, sign_mode: str = "spell"):
-        """Run a mode on a bundled sample image: no camera or upload needed."""
+    async def demo_analyze(
+        group: str, name: str, mode: str | None = None, sign_mode: str = "spell", annotate: bool = True
+    ):
+        """Run a mode on a bundled sample image: no camera or upload needed.
+
+        ``annotate=false`` omits the annotated image, as in ``/api/analyze``.
+        """
         if group == "video" or name not in list_samples(group):
             raise HTTPException(status_code=404, detail="Unknown sample")
         key = mode_key(mode or group, sign_mode)
         img = decode_checked((SAMPLES_DIR / group / name).read_bytes())
-        return await run_in_threadpool(analyze, img, key)
+        return await run_in_threadpool(analyze, img, key, annotate)
 
     return app
 

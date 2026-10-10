@@ -90,6 +90,10 @@ def test_face_expression(faces_det, label):
     assert len(dets) == 1, [d.label for d in dets]
     assert dets[0].label == label
     assert label in dets[0].extra["top3"]
+    scores = dets[0].extra["scores"]
+    assert set(scores) == {"angry", "disgust", "fear", "happy", "neutral", "sad", "surprised"}
+    assert sum(scores.values()) == pytest.approx(1.0, abs=0.01)
+    assert max(scores, key=scores.get) == label
     if label == "happy":
         assert dets[0].confidence > 0.9
 

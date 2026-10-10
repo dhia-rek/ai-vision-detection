@@ -82,7 +82,8 @@ class ExpressionDetector:
 
         Returns:
             One ``Detection`` per face labelled with the top expression; ``extra`` holds
-            ``face_confidence`` and the ``top3`` expression scores.
+            ``face_confidence``, the ``top3`` expression scores and ``scores``, the probability of
+            all seven expressions (in ``EXPRESSIONS`` order).
         """
         h, w = image.shape[:2]
         with self._lock:
@@ -108,6 +109,9 @@ class ExpressionDetector:
                         extra={
                             "face_confidence": round(float(face[14]), 4),
                             "top3": {EXPRESSIONS[i]: round(float(probs[i]), 4) for i in top},
+                            "scores": {
+                                n: round(float(p), 4) for n, p in zip(EXPRESSIONS, probs, strict=True)
+                            },
                         },
                     )
                 )
