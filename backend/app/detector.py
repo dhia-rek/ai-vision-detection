@@ -10,7 +10,7 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 import cv2
 import numpy as np
@@ -18,6 +18,11 @@ import numpy as np
 
 @dataclass(frozen=True)
 class Detection:
+    """One detected object, face or hand, in pixel coordinates of the source image.
+
+    ``extra`` is excluded from equality comparison.
+    """
+
     label: str
     confidence: float
     x1: float
@@ -30,6 +35,14 @@ class Detection:
     extra: dict = field(default_factory=dict, compare=False)
 
     def to_dict(self) -> dict:
+        """Serialise to the JSON shape returned by the API.
+
+        Floats are rounded to keep payloads small; ``extra`` keys are merged at the top
+        level and may override the standard keys.
+
+        Returns:
+            Dict with ``class``, ``confidence``, ``bbox`` and, if present, ``points``.
+        """
         d = {
             "class": self.label,
             "confidence": round(self.confidence, 4),
@@ -42,15 +55,26 @@ class Detection:
 
 
 class Detector(Protocol):
+    """Interface shared by all detectors (objects, faces, sign, stub)."""
+
     name: str
 
-    def detect(self, image: np.ndarray) -> list[Detection]: ...
+    def detect(self, image: np.ndarray) -> list[Detection]:
+        """Detect things in a BGR image and return them as ``Detection`` objects."""
+        ...
 
 
 class YoloDetector:
     """Ultralytics YOLOv8 detector (COCO, 80 classes)."""
 
-    def __init__(self, weights: str | Path, conf: float = 0.25, device: str = "cpu"):
+    def __init__(self, weights: str | Path, conf: float = 0.25, device: str = "cpu") -> None:
+        """Load YOLO weights.
+
+        Args:
+            weights: Path to a YOLO ``.pt`` weights file.
+            conf: Minimum confidence for a box to be returned.
+            device: Torch device string, e.g. "cpu" or "cuda:0".
+        """
         from ultralytics import YOLO  # heavy import, only when actually used
 
         self.model = YOLO(str(weights))
@@ -60,8 +84,18 @@ class YoloDetector:
         self._lock = threading.Lock()
 
     def detect(self, image: np.ndarray) -> list[Detection]:
+        """Run YOLO on a BGR image.
+
+        The model call is serialised with a lock because one model instance is shared
+        between concurrent requests and is not assumed to be thread-safe.
+
+        Returns:
+            One ``Detection`` per box, labelled with the COCO class name.
+        """
         with self._lock:
-            result = self.model.predict(image, conf=self.conf, device=self.device, verbose=False)[0]
+            # ultralytics types predict() loosely; with a single ndarray input it is a list[Results].
+            results: Any = self.model.predict(image, conf=self.conf, device=self.device, verbose=False)
+            result = results[0]
         names = result.names
         out = []
         for box in result.boxes:
@@ -76,15 +110,22 @@ class StubDetector:
     name = "stub"
 
     def detect(self, image: np.ndarray) -> list[Detection]:
+        """Return a single "object" box covering the central half of the image."""
         h, w = image.shape[:2]
         return [Detection("object", 0.99, w * 0.25, h * 0.25, w * 0.75, h * 0.75)]
 
 
 def _color(label: str) -> tuple[int, int, int]:
-    # Stable per-class colour (BGR) without depending on Python's salted hash().
+    """Return a deterministic BGR colour for a label.
+
+    Seeded from the characters rather than ``hash()``, which is salted per process, so
+    colours stay the same across runs. Channels are at least 60 so they never turn
+    near-black on dark images.
+    """
     seed = sum(ord(c) * (i + 1) for i, c in enumerate(label))
     rng = np.random.default_rng(seed)
-    return tuple(int(c) for c in rng.integers(60, 255, size=3))
+    b, g, r = (int(c) for c in rng.integers(60, 255, size=3))
+    return (b, g, r)
 
 
 # MediaPipe hand skeleton (pairs of landmark indices).
@@ -95,7 +136,19 @@ HAND_EDGES = (
 
 
 def annotate(image: np.ndarray, detections: list[Detection]) -> np.ndarray:
-    """Draw boxes and labels with plain OpenCV (no font download needed)."""
+    """Draw boxes, labels and hand skeletons with plain OpenCV (no font download needed).
+
+    Line thickness scales with the shorter image side. Hand skeletons are drawn only
+    for detections with exactly 21 points. The label sits above the box, clamped so it
+    stays inside the image when the box touches the top edge.
+
+    Args:
+        image: BGR image; not modified.
+        detections: Detections to draw.
+
+    Returns:
+        A new annotated BGR image.
+    """
     out = image.copy()
     thickness = max(1, round(min(out.shape[:2]) / 400))
     for d in detections:
@@ -127,6 +180,11 @@ def annotate(image: np.ndarray, detections: list[Detection]) -> np.ndarray:
 
 
 def encode_jpeg(image: np.ndarray, quality: int = 80) -> bytes:
+    """Encode a BGR image as JPEG bytes.
+
+    Raises:
+        RuntimeError: If OpenCV fails to encode the image.
+    """
     ok, buf = cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), int(quality)])
     if not ok:
         raise RuntimeError("Failed to encode image")
@@ -134,4 +192,5 @@ def encode_jpeg(image: np.ndarray, quality: int = 80) -> bytes:
 
 
 def decode_image(raw: bytes) -> np.ndarray | None:
+    """Decode image bytes to a BGR array, or return None if they are not a valid image."""
     return cv2.imdecode(np.frombuffer(raw, dtype=np.uint8), cv2.IMREAD_COLOR)
