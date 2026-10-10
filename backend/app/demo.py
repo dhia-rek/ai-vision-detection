@@ -1,6 +1,6 @@
 """Offline demo: run the detector on the bundled samples, no camera or upload.
 
-uv run python -m app.demo                       # objects (YOLOv8n on CPU), prints a table
+uv run python -m app.demo                       # objects (YOLO11n on CPU), prints a table
 uv run python -m app.demo --mode faces          # facial expressions on the face samples
 uv run python -m app.demo --mode sign           # ASL letters (sign-gestures for gestures)
 uv run python -m app.demo --out ../docs/demo    # also save annotated images + demo.gif
