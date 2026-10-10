@@ -10,3 +10,6 @@ venv/
 backend/temp/
 backend/outputs/
 runs/
+
+# model weights are downloaded on first run (app/zoo.py)
+*.pt
