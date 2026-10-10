@@ -1069,7 +1069,7 @@ kbd {
   color:var(--accent-ink)
 }
 .btn-primary:hover {
-  background:color-mix(in srgb,var(--accent) 88%,white);
+  background:color-mix(in srgb,var(--accent) 92%,white);
   color:var(--accent-ink)
 }
 .btn-quiet {

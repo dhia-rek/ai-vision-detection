@@ -12,15 +12,19 @@ Real-time **object detection**, **facial expression recognition** and **ASL fing
 | Objects | Facial expression |
 | --- | --- |
 | ![Objects](docs/screenshot-objects.jpg) | ![Faces](docs/screenshot-faces.jpg) |
-| *Bicycles: 8 detections, 26-89 %.* | *Happy, 100 %.* |
+| *Street scene: boxes drawn client-side, counts per class on the right.* | *Happy, with the score of all seven expressions.* |
 
 | Sign: gestures | Sign: letters |
 | --- | --- |
 | ![Gestures](docs/screenshot-sign-gestures.jpg) | ![Letters](docs/screenshot-sign-letters.jpg) |
-| *"I love you", 90 %.* | *Letter Y, 100 %.* |
+| *"I love you", 90 %.* | *Letter Y, 100 %, hand skeleton overlay.* |
 
 ![Fingerspelling a video](docs/screenshot-sign-video.jpg)
-*The demo video spelled "CAB" live in the browser.*
+*A sample video being fingerspelled live: current letter, hold-progress ring and the word so far.*
+
+| Light theme | Phone (dark) | Phone (light) |
+| --- | --- | --- |
+| ![Light](docs/screenshot-light.jpg) | ![Phone dark](docs/screenshot-phone.jpg) | ![Phone light](docs/screenshot-phone-light.jpg) |
 
 ## Modes
 
@@ -34,6 +38,16 @@ Sources: **Webcam**, **Video file**, **Image**. Bundled sample images and sample
 Deep links: `/?mode=objects|faces|sign&sign_mode=spell|gestures&source=webcam|video|image&sample=<file>`.
 
 This was built as a demo of how a browser can help communicate with non-speaking people. It is **not** a replacement for an interpreter (see [Limitations](#limitations)).
+
+## Web UI
+
+One viewport, one insight panel. The browser sends frames to `/api/analyze?annotate=false` and draws the result itself: boxes, labels and hand skeletons are painted on a `<canvas>` over the media from the returned JSON, so they stay sharp at any size and glide between frames. Per-class colours come from a fixed palette.
+
+- **Modes** (keys `1` `2` `3`): Objects (counts per class as bars), Expressions (all seven scores per face), Sign language (current letter, hold-progress ring, word builder; Letters or Gestures).
+- **Sources:** webcam, video file or image; drop a file anywhere on the page; bundled samples are one click away. `Space` pauses, `O` toggles the overlay, `T` the theme, `?` lists shortcuts.
+- **Status bar:** live FPS with a sparkline, round-trip latency, model name, device.
+- Dark by default, follows `prefers-color-scheme`, with a manual toggle. Responsive down to a phone. Plain HTML, CSS and JS in `backend/static/`, no build step and no external requests. Icons are inline [Lucide](https://lucide.dev) (ISC).
+- Screenshots: `uv run --no-project --with playwright python scripts/ui_shots.py --base http://localhost:8000 --out shots` (all modes, desktop and phone, dark and light; fails on console errors or horizontal overflow).
 
 ## Architecture
 
@@ -54,7 +68,7 @@ flowchart LR
     UI --> S[speller in JS<br/>letters -> text]
 ```
 
-Images and frames are decoded in memory and never written to disk. Detectors are created lazily per mode and guarded by a lock.
+Images and frames are decoded in memory and never saved by the app (the web framework may spool uploads over 1 MiB to a temporary file for the duration of the request; videos are always written to a private temp file that is deleted right after). Detectors are created lazily per mode and guarded by a lock.
 
 ## How each mode works
 
