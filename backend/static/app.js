@@ -111,7 +111,7 @@ class LetterSmoother {
 }
 if (typeof module !== 'undefined') module.exports = { LetterSmoother };
 const letterSmoother = new LetterSmoother();
-const RECORD_KEY = 'avd.recordings.v1', RECORD_LIMIT = 20000;
+const RECORD_KEY = 'avd.recordings.v1', RECORD_LIMIT = 5000;  // ~3 MB of JSON: stays inside the usual 5 MB localStorage quota
 let recordings = [];
 let recording = false;
 let previousRecorded = null, previousRecordAt = 0;
@@ -140,24 +140,19 @@ function recordDetection(dets, size) {
     const delta = points.reduce((sum, p, i) => sum + p.reduce((n, v, k) => n + Math.abs(v - previousRecorded[i][k]), 0), 0) / 63;
     if (delta < 0.002) return;
   }
-  if (recordings.length >= RECORD_LIMIT) {
-    recording = false;
-    $('recordToggle').setAttribute('aria-pressed', 'false');
-    $('recordToggle').textContent = 'Start recording';
-    $('recordStatus').textContent = 'Recording stopped: the 20,000 sample limit was reached.';
-    return;
-  }
   recordings.push({ letter: $('recordLetter').value, landmarks: points, handedness: hand.handedness || null, image_size: [size.w, size.h] });
   previousRecorded = points.map((p) => p.slice()); previousRecordAt = now;
   saveRecordings();
   if (recordings.length >= RECORD_LIMIT) {
-    recording = false;
-    $('recordToggle').setAttribute('aria-pressed', 'false');
-    $('recordToggle').textContent = 'Start recording';
-    $('recordStatus').textContent = 'Recording stopped: the 20,000 sample limit was reached.';
+    setRecording(false);
+    $('recordStatus').textContent = 'Recording stopped: the 5,000 sample limit was reached. Download and clear to continue.';
   }
 }
 function setRecording(on) {
+  if (on && recordings.length >= RECORD_LIMIT) {
+    $('recordStatus').textContent = 'The 5,000 sample limit is reached. Download and clear first.';
+    return;
+  }
   recording = on;
   previousRecorded = null; previousRecordAt = 0;
   $('recordToggle').setAttribute('aria-pressed', String(on));
