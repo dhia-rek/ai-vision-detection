@@ -332,9 +332,12 @@ function setState(s) { document.body.dataset.state = s; }
 function setStatus(s) { $('statusValue').textContent = s; }
 function showError(m) { $('errorMessage').textContent = m; $('errorMessage').classList.add('show'); }
 function clearError() { $('errorMessage').textContent = ''; $('errorMessage').classList.remove('show'); }
+/** Query string for the API: current mode plus the sign sub-mode (ignored by the server unless mode=sign). */
 function qs() { return `mode=${state.mode}&sign_mode=${state.sign}`; }
+/** Remember a blob: URL so revokeUrls() can free it when the input source changes. */
 function trackUrl(u) { objectUrls.push(u); return u; }
 function revokeUrls() { objectUrls.forEach((u) => URL.revokeObjectURL(u)); objectUrls = []; }
+/** True when letters are being fingerspelled from a live source (webcam/video), i.e. the speller panel applies. */
 function spellActive() { return state.mode === 'sign' && state.sign === 'spell' && state.source !== 'image'; }
 
 function renderDetections(list) {
@@ -374,6 +377,13 @@ const builder = {
   holdS: 0.8, spaceS: 1.5, minConf: 0.6,
   text: '', current: null, since: 0, committed: false, lastSeen: null,
   reset() { this.current = null; this.since = 0; this.committed = false; this.lastSeen = null; },
+  /**
+   * Feed one frame's prediction. A letter held for holdS seconds is committed once;
+   * no letter for spaceS seconds inserts a space. Keep in sync with WordBuilder in app/sign.py.
+   * @param {?string} letter predicted letter or null if no hand
+   * @param {number} conf prediction confidence 0..1
+   * @param {number} t timestamp in seconds
+   */
   feed(letter, conf, t) {
     if (letter == null || conf < this.minConf) {
       this.current = null; this.committed = false;
@@ -405,12 +415,18 @@ $('backBtn').onclick = () => builder.edit((s) => s.slice(0, -1));
 $('clearBtn').onclick = () => { builder.text = ''; builder.reset(); builder.render(performance.now() / 1000); };
 
 // ---------- frame loop (webcam + video file) ----------
+/** Whether the webcam/video element has a decodable frame to send right now. */
 function sourceReady() {
   if (state.source === 'webcam') return !!stream && video.videoWidth > 0;
   if (state.source === 'video') return video.videoWidth > 0 && !video.paused && !video.ended;
   return false;
 }
 
+/**
+ * Send frames to the server one at a time while the source is live.
+ * @param {number} gen Loop generation; the loop exits as soon as loopGen changes (stopLoop/startLoop),
+ *   which is how mode or source switches cancel a request cycle without races.
+ */
 async function frameLoop(gen) {
   if (loopRunning) return;
   loopRunning = true;

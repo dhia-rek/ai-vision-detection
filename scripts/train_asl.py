@@ -1,4 +1,6 @@
-"""Train the ASL letter classifier. Usage:
+"""Train the ASL letter classifier.
+
+Usage:
 
 uv run --with numpy --with scikit-learn --with huggingface_hub \
     python scripts/train_asl.py --cache /tmp/asl-now
@@ -16,7 +18,18 @@ sys.path.insert(0, str(ROOT / "backend"))
 from app.sign_features import FEATURE_VERSION, landmark_features  # noqa: E402
 
 
-def load(cache):
+def load(cache: str) -> tuple[np.ndarray, np.ndarray]:
+    """Download the ASL-now fingerspelling dataset and read its landmark files.
+
+    Only single-letter sub-folders are used; each ``*.json`` holds 21 landmarks
+    (x, y, z). Files with any other shape are skipped.
+
+    Args:
+        cache: Local directory for the Hugging Face snapshot.
+
+    Returns:
+        ``(X, y)``: X of shape (n, 21, 3) and an array of n letter labels.
+    """
     from huggingface_hub import snapshot_download
 
     snapshot_download(repo_id="sid220/asl-now-fingerspelling", repo_type="dataset", local_dir=cache)
@@ -31,13 +44,26 @@ def load(cache):
     return np.array(X), np.array(y)
 
 
-def feats(P, mirror=False):
+def feats(P: np.ndarray, mirror: bool = False) -> np.ndarray:
+    """Compute feature vectors for a batch of hands (optionally treated as "Left")."""
     return np.array([landmark_features(p, "Left" if mirror else None) for p in P])
 
 
-def augment(P, y, k=10, seed=0):
-    """k augmented copies: in-plane rotation +-30deg, scale 0.85-1.15, gaussian noise (1% of hand size),
-    x-vs-y aspect stretch 0.6-1.7 (camera aspect mismatch), random mirror (handedness)."""
+def augment(P: np.ndarray, y: np.ndarray, k: int = 10, seed: int = 0) -> tuple[np.ndarray, np.ndarray]:
+    """Build K randomly augmented copies of the training set.
+
+    Augmentations: in-plane rotation +-30deg, scale 0.85-1.15, gaussian noise (1% of hand size),
+    x-vs-y aspect stretch 0.6-1.7 (camera aspect mismatch), random mirror (handedness).
+
+    Args:
+        P: Landmarks, shape (n, 21, 3).
+        y: Labels, length n.
+        k: Number of augmented copies of the whole set.
+        seed: RNG seed for reproducibility.
+
+    Returns:
+        ``(features, labels)`` stacked over the k copies (n*k rows).
+    """
     r = np.random.default_rng(seed)
     Fs, Ys = [], []
     for _ in range(k):
@@ -58,7 +84,21 @@ def augment(P, y, k=10, seed=0):
     return np.vstack(Fs), np.concatenate(Ys)
 
 
-def fit_export(F, Y, out, seed=0):
+def fit_export(F: np.ndarray, Y: np.ndarray, out: str, seed: int = 0) -> tuple:
+    """Fit a standard scaler and logistic regression, and save them as an ``.npz``.
+
+    The saved file uses the layout read by ``AslLetterClassifier`` (a single linear
+    layer ``W1``/``b1`` plus ``mean``/``std``, ``classes`` and ``feature_version``).
+
+    Args:
+        F: Feature matrix.
+        Y: Labels.
+        out: Output ``.npz`` path.
+        seed: Unused; kept for call-site symmetry.
+
+    Returns:
+        ``(scaler, model)`` fitted objects.
+    """
     from sklearn.linear_model import LogisticRegression
     from sklearn.preprocessing import StandardScaler
 
@@ -76,7 +116,12 @@ def fit_export(F, Y, out, seed=0):
     return sc, m
 
 
-def main():
+def main() -> None:
+    """Train twice and write the final model.
+
+    The first run uses an 80/20 split to report held-out accuracy; the second uses
+    all data and writes the model to ``--out``.
+    """
     ap = argparse.ArgumentParser()
     ap.add_argument("--cache", default="/tmp/asl-now")
     ap.add_argument("--out", default=str(ROOT / "backend/app/models/asl_letters.npz"))
