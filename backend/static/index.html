@@ -202,7 +202,7 @@
     <div class="controls">
         <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;align-items:center;width:100%">
             <button id="webcamModeBtn" class="btn-primary">Webcam (Live)</button>
-            <button id="uploadModeBtn" class="btn-secondary">Upload Image</button>
+            <button id="uploadModeBtn" class="btn-secondary">Upload Image / Demo</button>
         </div>
 
         <div style="height:12px"></div>
@@ -255,6 +255,9 @@
                     <div class="upload-text" style="font-size:15px;color:#555;margin-bottom:6px;">Drag and drop your image here</div>
                     <div class="upload-hint" style="font-size:13px;color:#999;">or click to select a file</div>
                     <input type="file" id="fileInput" accept="image/*" />
+                </div>
+                <div id="demoSamples" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;">
+                    <span class="small" style="margin-top:0">No camera? Try a bundled sample:</span>
                 </div>
             </div>
         </div>
@@ -322,6 +325,8 @@
     const uploadMode = document.getElementById('uploadMode');
     const cameraHint = document.getElementById('cameraHint');
     const uploadHint = document.getElementById('uploadHint');
+    const webcamControls = document.getElementById('webcamControls');
+    const uploadControls = document.getElementById('uploadControls');
 
     const uploadBox = document.getElementById('uploadBox');
     const fileInput = document.getElementById('fileInput');
@@ -486,6 +491,8 @@
         if (mode === 'webcam') {
             uploadMode.style.display = 'none';
             webcamMode.style.display = 'grid';
+            webcamControls.style.display = 'flex';
+            uploadControls.style.display = 'none';
             webcamModeBtn.className = 'btn-primary';
             uploadModeBtn.className = 'btn-secondary';
 
@@ -501,6 +508,8 @@
 
             webcamMode.style.display = 'none';
             uploadMode.style.display = 'block';
+            webcamControls.style.display = 'none';
+            uploadControls.style.display = 'block';
             webcamModeBtn.className = 'btn-secondary';
             uploadModeBtn.className = 'btn-primary';
 
@@ -587,8 +596,7 @@
 
             const data = await response.json();
 
-            const resultImageUrl = `/${data.result_image}`;
-            resultImgUpload.src = resultImageUrl;
+            resultImgUpload.src = data.result_image;
 
             const totalNum = data.total_detections ?? 0;
             countValue.textContent = String(totalNum);
@@ -608,8 +616,46 @@
     startBtn.addEventListener('click', startCamera);
     stopBtn.addEventListener('click', stopCamera);
 
-    // Initial mode
-    setMode('webcam');
+    // Offline demo: run detection on bundled sample images (no camera/upload needed)
+    async function runSample(name) {
+        clearError();
+        showUploadLoading(true);
+        try {
+            originalImg.src = `/demo/samples/${encodeURIComponent(name)}`;
+            const response = await fetch(`/demo/detect/${encodeURIComponent(name)}`, { method: 'POST' });
+            if (!response.ok) throw new Error(`Backend error: ${response.status}`);
+            const data = await response.json();
+            resultImgUpload.src = data.result_image;
+            const totalNum = data.total_detections ?? 0;
+            countValue.textContent = String(totalNum);
+            objectsBadgeUpload.textContent = `${totalNum} objects`;
+            statusValue.textContent = 'Complete';
+        } catch (err) {
+            showUploadError(err.message || String(err));
+        } finally {
+            showUploadLoading(false);
+        }
+    }
+
+    fetch('/demo/samples').then(r => r.json()).then(({ samples }) => {
+        const box = document.getElementById('demoSamples');
+        for (const name of samples) {
+            const b = document.createElement('button');
+            b.className = 'btn-secondary';
+            b.textContent = name.replace(/\.[^.]+$/, '');
+            b.addEventListener('click', () => runSample(name));
+            box.appendChild(b);
+        }
+    }).catch(() => {});
+
+    // Initial mode (?mode=demo opens the upload/demo view, e.g. ?mode=demo&sample=street.jpg)
+    const params = new URLSearchParams(location.search);
+    if (params.get('mode') === 'demo') {
+        setMode('upload');
+        if (params.get('sample')) runSample(params.get('sample'));
+    } else {
+        setMode('webcam');
+    }
 </script>
 </body>
 </html>

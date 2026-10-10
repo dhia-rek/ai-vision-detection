@@ -1,199 +1,151 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import HTMLResponse, Response
-from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
-import shutil
+"""FastAPI app: image upload + live webcam frame detection with YOLOv8.
+
+Environment variables:
+  AVD_DETECTOR       "yolo" (default) or "stub" (no torch, for tests/smoke)
+  AVD_WEIGHTS        path or Ultralytics model name (default: repo-root yolov8n.pt)
+  AVD_CONF           confidence threshold (default 0.25)
+  AVD_MAX_UPLOAD_MB  upload size limit in MB (default 10)
+  AVD_CORS_ORIGINS   comma-separated allowed origins (default: none, same-origin only)
+"""
+
+from __future__ import annotations
+
+import base64
 import os
+from functools import lru_cache
 from pathlib import Path
-from ultralytics import YOLO
-import cv2
-import numpy as np
 
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, Response
 
-# Configuration paths
-BASE_DIR = Path(__file__).resolve().parent.parent
-UPLOAD_DIR = BASE_DIR / "temp"
-OUTPUT_DIR = BASE_DIR / "outputs"
-STATIC_DIR = BASE_DIR / "static"
-
-# Create directories if they don't exist
-for folder in [UPLOAD_DIR, OUTPUT_DIR, STATIC_DIR]:
-    folder.mkdir(parents=True, exist_ok=True)
-
-# Initialize FastAPI app
-app = FastAPI(title="AI Vision Detection API")
-
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins (change to specific domains in production)
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+from .detector import (
+    Detector,
+    StubDetector,
+    YoloDetector,
+    annotate,
+    decode_image,
+    encode_jpeg,
 )
 
-# Load YOLO model
-try:
-    model_path = Path("app/yolov8n.pt")
-    # If model file doesn't exist in app/, fallback to default download behavior
-    if model_path.exists():
-        model = YOLO(str(model_path))
-    else:
-        model = YOLO("yolov8n.pt")
-except Exception as e:
-    print(f"Error loading model: {e}")
-    model = None
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+ROOT_DIR = BACKEND_DIR.parent
+STATIC_DIR = BACKEND_DIR / "static"
+SAMPLES_DIR = BACKEND_DIR / "samples"
+IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 
-@app.get("/", response_class=HTMLResponse)
-async def root():
-    """Serve the HTML interface"""
-    try:
-        with open(STATIC_DIR / "index.html", "r", encoding="utf-8") as f:
-            return f.read()
-    except FileNotFoundError:
-        return """
-        <html>
-            <body style="font-family: Arial; text-align: center; padding: 50px;">
-                <h1>AI Vision Detection API</h1>
-                <p>⚠️ Interface HTML not found.</p>
-                <p>Make sure <code>static/index.html</code> exists.</p>
-                <p><a href="/docs">API Documentation</a></p>
-            </body>
-        </html>
-        """
 
-@app.post("/detect/")
-async def detect(file: UploadFile = File(...)):
-    """Upload an image and get YOLO detection results"""
-    if model is None:
-        raise HTTPException(status_code=500, detail="YOLO model not loaded")
-    
-    file_path = None
-    try:
-        # Validate file type
-        if not file.content_type.startswith("image/"):
+def default_weights() -> str:
+    env = os.getenv("AVD_WEIGHTS")
+    if env:
+        return env
+    local = ROOT_DIR / "yolov8n.pt"
+    # Fall back to the model name; Ultralytics downloads it on first run.
+    return str(local) if local.exists() else "yolov8n.pt"
+
+
+def build_detector() -> Detector:
+    kind = os.getenv("AVD_DETECTOR", "yolo").lower()
+    if kind == "stub":
+        return StubDetector()
+    if kind != "yolo":
+        raise ValueError(f"Unknown AVD_DETECTOR={kind!r} (use 'yolo' or 'stub')")
+    return YoloDetector(default_weights(), conf=float(os.getenv("AVD_CONF", "0.25")))
+
+
+def list_samples() -> list[str]:
+    if not SAMPLES_DIR.is_dir():
+        return []
+    return sorted(p.name for p in SAMPLES_DIR.iterdir() if p.suffix.lower() in IMAGE_SUFFIXES)
+
+
+def create_app(detector: Detector | None = None) -> FastAPI:
+    app = FastAPI(title="AI Vision Detection API", version="1.0.0")
+    max_bytes = int(float(os.getenv("AVD_MAX_UPLOAD_MB", "10")) * 1024 * 1024)
+
+    origins = [o.strip() for o in os.getenv("AVD_CORS_ORIGINS", "").split(",") if o.strip()]
+    if origins:
+        app.add_middleware(
+            CORSMiddleware, allow_origins=origins, allow_methods=["GET", "POST"], allow_headers=["*"]
+        )
+
+    @lru_cache(maxsize=1)
+    def get_detector() -> Detector:
+        # Lazy: the app starts instantly and the model loads on the first request.
+        return detector if detector is not None else build_detector()
+
+    async def read_image(upload: UploadFile):
+        if not (upload.content_type or "").startswith("image/"):
             raise HTTPException(status_code=400, detail="File must be an image")
-        
-        # Save uploaded file temporarily
-        file_path = UPLOAD_DIR / file.filename
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        # Run YOLO detection
-        results = model(str(file_path))
-        
-        # Get the result
-        result = results[0]
-        
-        # Plot the results (annotated image)
-        annotated_frame = result.plot()
-        
-        # Save output image
-        output_filename = f"result_{Path(file.filename).stem}.jpg"
-        output_path = OUTPUT_DIR / output_filename
-        cv2.imwrite(str(output_path), annotated_frame)
-        
-        # Prepare response with statistics
-        detections = []
-        for box in result.boxes:
-            detection = {
-                "class": result.names[int(box.cls)],
-                "confidence": float(box.conf),
-                "bbox": {
-                    "x1": float(box.xyxy[0][0]),
-                    "y1": float(box.xyxy[0][1]),
-                    "x2": float(box.xyxy[0][2]),
-                    "y2": float(box.xyxy[0][3])
-                }
-            }
-            detections.append(detection)
-        
+        raw = await upload.read(max_bytes + 1)
+        if len(raw) > max_bytes:
+            raise HTTPException(status_code=413, detail="Image too large")
+        img = decode_image(raw)
+        if img is None:
+            raise HTTPException(status_code=400, detail="Could not decode image")
+        return img
+
+    def run(img) -> dict:
+        det = get_detector()
+        detections = det.detect(img)
+        jpeg = encode_jpeg(annotate(img, detections), quality=85)
         return {
-            "result_image": f"outputs/{output_filename}",
-            "detections": detections,
+            # Inline data URL: uploads and results are never written to disk.
+            "result_image": "data:image/jpeg;base64," + base64.b64encode(jpeg).decode(),
+            "detections": [d.to_dict() for d in detections],
             "total_detections": len(detections),
-            "model_used": "YOLOv8n"
+            "model_used": det.name,
         }
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    
-    finally:
-        # Clean up temporary file
-        if file_path and os.path.exists(file_path):
-            os.remove(file_path)
 
-def _encode_jpeg(image: np.ndarray, quality: int = 80) -> bytes:
-    """Encode an OpenCV BGR image to JPEG bytes."""
-    encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), int(quality)]
-    ok, buf = cv2.imencode('.jpg', image, encode_param)
-    if not ok:
-        raise RuntimeError('Failed to encode image')
-    return buf.tobytes()
+    @app.get("/", include_in_schema=False)
+    def root():
+        return FileResponse(STATIC_DIR / "index.html")
 
+    @app.get("/health")
+    def health():
+        return {"status": "ok"}
 
-@app.post("/detect/frame")
-async def detect_frame(frame: UploadFile = File(...), quality: int = 80):
-    """Receive one video frame (JPEG) under form field `frame` and return annotated frame (JPEG)."""
+    @app.post("/detect/")
+    async def detect(file: UploadFile = File(...)):
+        """Upload an image; get detections and an annotated JPEG (data URL)."""
+        return run(await read_image(file))
 
-    if model is None:
-        raise HTTPException(status_code=500, detail="YOLO model not loaded")
+    @app.post("/detect/frame")
+    async def detect_frame(frame: UploadFile = File(...), quality: int = Query(80, ge=10, le=95)):
+        """One webcam frame in, annotated JPEG out (count in X-Total-Detections)."""
+        img = await read_image(frame)
+        detections = get_detector().detect(img)
+        return Response(
+            content=encode_jpeg(annotate(img, detections), quality=quality),
+            media_type="image/jpeg",
+            headers={"X-Total-Detections": str(len(detections))},
+        )
 
-    if frame.content_type not in ("image/jpeg", "image/jpg"):
-        # We still try to parse if browser sends image/*
-        if not frame.content_type.startswith("image/"):
-            raise HTTPException(status_code=400, detail="Frame must be a JPEG image")
+    @app.get("/demo/samples")
+    def demo_samples():
+        """Bundled, openly licensed sample images (see backend/samples/CREDITS.md)."""
+        return {"samples": list_samples()}
 
-    raw = await frame.read()
-    np_arr = np.frombuffer(raw, dtype=np.uint8)
-    img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-    if img is None:
-        raise HTTPException(status_code=400, detail="Could not decode JPEG frame")
+    @app.get("/demo/samples/{name}")
+    def demo_sample_image(name: str):
+        if name not in list_samples():
+            raise HTTPException(status_code=404, detail="Unknown sample")
+        return FileResponse(SAMPLES_DIR / name)
 
-    results = model(img)
-    result = results[0]
-    annotated = result.plot()  # BGR
+    @app.post("/demo/detect/{name}")
+    def demo_detect(name: str):
+        """Run detection on a bundled sample: no camera or upload needed."""
+        if name not in list_samples():
+            raise HTTPException(status_code=404, detail="Unknown sample")
+        return run(decode_image((SAMPLES_DIR / name).read_bytes()))
 
-    # detections metadata (lightweight)
-    detections = []
-    for box in result.boxes:
-        detections.append({
-            "class": result.names[int(box.cls)],
-            "confidence": float(box.conf),
-        })
-
-    annotated_bytes = _encode_jpeg(annotated, quality=quality)
-
-    # Return only image bytes for fast rendering.
-    # Frontend can separately request metadata if needed.
-    headers = {
-        "X-Total-Detections": str(len(detections)),
-    }
-    return Response(content=annotated_bytes, media_type="image/jpeg", headers=headers)
+    return app
 
 
+app = create_app()
 
-
-
-
-@app.get("/detect/history/")
-async def get_history():
-
-
-
-    """Get list of recent detections"""
-    try:
-        files = os.listdir(OUTPUT_DIR)
-        files.sort(key=lambda x: os.path.getmtime(os.path.join(OUTPUT_DIR, x)), reverse=True)
-        return {
-            "recent_detections": files[:10]  # Return last 10 detections
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Mount outputs directory for serving images
-app.mount("/outputs", StaticFiles(directory=str(OUTPUT_DIR)), name="outputs")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    uvicorn.run(app, host="127.0.0.1", port=8000)
