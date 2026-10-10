@@ -119,8 +119,12 @@ function renderChart() {
       const img = document.createElement('img'); img.src = ASL_IMG(letter); img.alt = ''; img.loading = 'lazy';
       holder.append(img); button.append(holder);
       const label = document.createElement('span'); label.className = 'chart-letter'; label.textContent = letter; button.append(label);
-      if (MOTION_LETTERS.includes(letter)) { button.classList.add('is-motion'); const tag = document.createElement('span'); tag.className = 'chart-tag'; tag.textContent = 'motion'; button.append(tag); }
-      button.addEventListener('click', () => setTarget(letter)); grid.append(button);
+      if (MOTION_LETTERS.includes(letter)) {
+        button.classList.add('is-motion'); button.disabled = true;
+        button.setAttribute('aria-label', `${letter} requires motion and cannot be practised here`);
+        const tag = document.createElement('span'); tag.className = 'chart-tag'; tag.textContent = 'motion'; button.append(tag);
+      } else button.addEventListener('click', () => setTarget(letter));
+      grid.append(button);
     }
   }
   for (const tile of grid.querySelectorAll('[data-letter]')) {

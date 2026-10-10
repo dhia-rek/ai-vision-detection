@@ -17,14 +17,16 @@ Real-time **object detection**, **facial expression recognition** and **ASL fing
 | Sign: gestures | Sign: letters |
 | --- | --- |
 | ![Gestures](docs/screenshot-sign-gestures.jpg) | ![Letters](docs/screenshot-sign-letters.jpg) |
-| *"I love you", 90 %.* | *Letter Y, 100 %, hand skeleton overlay.* |
+| *"I love you", with a hand skeleton overlay.* | *The letter B and its practice challenge.* |
 
-![Fingerspelling a video](docs/screenshot-sign-video.jpg)
-*A sample video being fingerspelled live: current letter, hold-progress ring and the word so far.*
+![Fingerspelling from the camera on a phone](docs/screenshot-sign-video.jpg)
+*Fingerspelling on a phone: current letter, practice challenge and the word so far.*
 
 | Light theme | Phone (dark) | Phone (light) |
 | --- | --- | --- |
 | ![Light](docs/screenshot-light.jpg) | ![Phone dark](docs/screenshot-phone.jpg) | ![Phone light](docs/screenshot-phone-light.jpg) |
+
+All UI screenshots use Chromium's fake **camera**, fed from bundled sample images. The page itself has no upload, sample picker or video-file source.
 
 ## Modes
 
