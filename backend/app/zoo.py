@@ -27,16 +27,18 @@ class ModelSpec:
     source: str
 
 
+DEFAULT_OBJECT_MODEL = "yolo11n.pt"
+
 MODELS: dict[str, ModelSpec] = {
     m.name: m
     for m in [
         ModelSpec(
-            "yolov8n.pt",
-            "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt",
-            "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
-            6.2,
+            "yolo11n.pt",
+            "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt",
+            "0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1",
+            5.4,
             "AGPL-3.0",
-            "Ultralytics YOLOv8n, COCO 80 classes",
+            "Ultralytics YOLO11n, COCO 80 classes",
         ),
         ModelSpec(
             "face_detection_yunet_2023mar.onnx",

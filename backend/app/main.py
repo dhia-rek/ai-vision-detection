@@ -3,13 +3,13 @@
 Serves images, uploaded videos and live webcam frames.
 
 Modes (query parameter `mode`):
-  objects  YOLOv8n, 80 COCO classes
+  objects  YOLO11n, 80 COCO classes
   faces    YuNet face detector + MobileFaceNet expression classifier (7 expressions)
   sign     MediaPipe hand landmarks; `sign_mode=spell` (ASL letters) or `gestures`
 
 Environment variables:
   AVD_DETECTOR       "real" (default) or "stub" (no models, for tests/smoke)
-  AVD_WEIGHTS        YOLO weights path (default: downloaded yolov8n.pt, see zoo.py)
+  AVD_WEIGHTS        YOLO weights path (default: downloaded yolo11n.pt, see zoo.py)
   AVD_MODEL_DIR      where downloaded models are cached
   AVD_CONF           YOLO confidence threshold (default 0.25)
   AVD_MAX_UPLOAD_MB  image upload limit in MB (default 10)
@@ -45,11 +45,12 @@ from .sign import SIGN_MODES
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 STATIC_DIR = BACKEND_DIR / "static"
 SAMPLES_DIR = BACKEND_DIR / "samples"
+ASL_WEB_MODEL = BACKEND_DIR / "app/models/asl_letters_web.json"
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 VIDEO_SUFFIXES = {".mp4", ".webm", ".mov"}
 
 MODES = {
-    "objects": "Object detection (YOLOv8n, 80 COCO classes)",
+    "objects": "Object detection (YOLO11n, 80 COCO classes)",
     "faces": "Facial expression (angry, disgust, fear, happy, neutral, sad, surprised)",
     "sign": "ASL fingerspelling letters (sign_mode=spell) or common hand gestures (sign_mode=gestures)",
 }
@@ -95,9 +96,9 @@ def build_detector(key: str = "objects") -> Detector:
     if os.getenv("AVD_DETECTOR", "real").lower() == "stub":
         return StubDetector()
     if key == "objects":
-        from .zoo import ensure_model
+        from .zoo import DEFAULT_OBJECT_MODEL, ensure_model
 
-        weights = os.getenv("AVD_WEIGHTS") or ensure_model("yolov8n.pt")
+        weights = os.getenv("AVD_WEIGHTS") or ensure_model(DEFAULT_OBJECT_MODEL)
         return YoloDetector(weights, conf=float(os.getenv("AVD_CONF", "0.25")))
     if key == "faces":
         from .faces import ExpressionDetector
@@ -265,7 +266,8 @@ def create_app(detector: Detector | None = None) -> FastAPI:
 
         Every ``round(source_fps / fps)``-th frame is analysed (at least every frame),
         stopping after ``max_seconds`` of video or ``MAX_VIDEO_FRAMES`` analysed frames.
-        In "sign-spell" mode the most confident hand per frame feeds a ``WordBuilder``
+        In "sign-spell" mode the most confident hand per frame (letter probabilities smoothed by a
+        ``LetterSmoother``) feeds a ``WordBuilder``
         and the typed text is included.
 
         Args:
@@ -290,9 +292,10 @@ def create_app(detector: Detector | None = None) -> FastAPI:
             det = get_detector(key)
             builder = None
             if key == "sign-spell":
-                from .sign import WordBuilder
+                from .sign import LetterSmoother, WordBuilder
 
                 builder = WordBuilder()
+                smoother = LetterSmoother()
             frames: list[dict] = []
             counts: Counter[str] = Counter()
             total_ms, idx = 0.0, 0
@@ -313,7 +316,8 @@ def create_app(detector: Detector | None = None) -> FastAPI:
                     counts.update(d.label for d in dets)
                     if builder is not None:
                         best = max(dets, key=lambda d: d.confidence, default=None)
-                        builder.feed(best.label if best else None, best.confidence if best else 0.0, t)
+                        letter, conf = smoother.feed(best.extra.get("scores") if best else None, t)
+                        builder.feed(letter, conf, t)
                     # Per-frame output stays small: no hand keypoints, no top-3.
                     brief = [
                         {"class": d.label, "confidence": round(d.confidence, 4), "bbox": d.to_dict()["bbox"]}
@@ -350,6 +354,15 @@ def create_app(detector: Detector | None = None) -> FastAPI:
     def health() -> dict:
         """Liveness probe."""
         return {"status": "ok"}
+
+    @app.get("/api/models/asl-letters-web", include_in_schema=False)
+    def asl_web_model() -> FileResponse:
+        """Serve the versioned ASL MLP export for opt-in browser inference."""
+        return FileResponse(
+            ASL_WEB_MODEL,
+            media_type="application/json",
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
 
     @app.get("/api/modes")
     def modes() -> dict:
