@@ -64,6 +64,35 @@ def test_analyze_every_mode(client, jpeg, params):
     assert img.shape == (80, 120, 3)
 
 
+def test_analyze_reports_image_size_and_device(client, jpeg):
+    body = post_image(client, "/api/analyze", jpeg).json()
+    assert body["image_size"] == {"width": 120, "height": 80}
+    assert body["device"] == "cpu"
+
+
+@pytest.mark.parametrize("params", MODE_PARAMS)
+def test_analyze_without_annotation(client, jpeg, params):
+    """annotate=false returns the same JSON minus the burned-in image."""
+    full = post_image(client, "/api/analyze", jpeg, params).json()
+    lean = post_image(client, "/api/analyze", jpeg, {**params, "annotate": "false"}).json()
+    assert "result_image" not in lean
+    assert lean == {k: v for k, v in full.items() if k not in ("result_image", "inference_ms")} | {
+        "inference_ms": lean["inference_ms"]
+    }
+
+
+def test_analyze_annotate_defaults_to_true(client, jpeg):
+    assert "result_image" in post_image(client, "/api/analyze", jpeg).json()
+    assert "result_image" in post_image(client, "/detect/", jpeg).json()
+
+
+def test_demo_analyze_without_annotation(client):
+    body = client.post("/demo/analyze/objects/dog.jpg", params={"annotate": "false"}).json()
+    assert "result_image" not in body
+    assert body["image_size"]["width"] > 0
+    assert body["detections"]
+
+
 def test_analyze_default_mode_is_objects(client, jpeg):
     assert post_image(client, "/api/analyze", jpeg).json()["mode"] == "objects"
 
