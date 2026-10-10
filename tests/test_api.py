@@ -310,3 +310,8 @@ def test_path_traversal_rejected(client, name):
 def test_path_traversal_in_group_rejected(client, group):
     assert client.get(f"/demo/samples/{group}/main.py").status_code == 404
     assert client.post(f"/demo/analyze/{group}/main.py").status_code == 404
+
+
+def test_frame_header_reports_truncation(client, jpeg):
+    r = client.post("/api/frame", files={"frame": ("f.jpg", jpeg, "image/jpeg")})
+    assert r.headers["X-Detections-Truncated"] == "false"

@@ -673,6 +673,8 @@ function setMode(mode, sign) {
   if (sign) state.sign = sign;
   if (!changed) return syncUI();
   imageGen++;
+  // Drop any in-flight frame from the old mode; the loop restarts itself with the new one.
+  if (loopRunning) stopLoop();
   if (state.source === 'image') { originalImg.removeAttribute('src'); setState('idle'); setStatus('Idle'); clearResult(); }
   builder.text = ''; builder.reset(); builder.render(performance.now() / 1000);
   syncUI();
