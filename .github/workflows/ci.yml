@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Lint and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - name: System libraries for MediaPipe (EGL/GLES)
+        run: sudo apt-get update -q && sudo apt-get install -y -q libegl1 libgles2 libgl1
+      - name: Cache pretrained models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ai-vision-detection/models
+          key: models-${{ hashFiles('backend/app/zoo.py') }}
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest -q -rs
+
+  smoke:
+    name: Smoke test (demo mode, real models on CPU)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --no-dev
+      - name: System libraries for MediaPipe (EGL/GLES)
+        run: sudo apt-get update -q && sudo apt-get install -y -q libegl1 libgles2 libgl1
+      - name: Cache pretrained models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ai-vision-detection/models
+          key: models-${{ hashFiles('backend/app/zoo.py') }}
+      - name: Demo CLI, all modes
+        working-directory: backend
+        run: |
+          ../.venv/bin/python -m app.demo | tee objects.txt && grep -q "dog" objects.txt
+          ../.venv/bin/python -m app.demo --mode faces | tee faces.txt && grep -q "happy" faces.txt
+          ../.venv/bin/python -m app.demo --mode sign-gestures | tee gestures.txt && grep -q "thumbs up" gestures.txt
+      - name: Demo API
+        working-directory: backend
+        run: |
+          # Run from .venv directly: a background `uv run` keeps the uv cache locked.
+          ../.venv/bin/uvicorn app.main:app --port 8000 &
+          SERVER=$!
+          trap 'kill $SERVER' EXIT
+          for i in $(seq 30); do curl -sf localhost:8000/health && break; sleep 1; done
+          curl -sf localhost:8000/ | grep -q "AI Vision"
+          curl -sf localhost:8000/demo/samples | grep -q street.jpg
+          curl -sf -X POST localhost:8000/demo/analyze/objects/cats.jpg | grep -q '"class":"cat"'
+          curl -sf -X POST localhost:8000/demo/analyze/faces/happy.jpg | grep -q '"class":"happy"'
+          curl -sf -X POST "localhost:8000/demo/analyze/sign/gesture_i_love_you.jpg?sign_mode=gestures" | grep -q 'I love you'

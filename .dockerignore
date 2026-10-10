@@ -1,0 +1,8 @@
+.git
+.venv
+.agent-scratch
+**/__pycache__
+**/.DS_Store
+docs
+tests
+*.pt
