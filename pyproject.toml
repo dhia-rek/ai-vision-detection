@@ -4,7 +4,7 @@ version = "1.0.0"
 description = "FastAPI + YOLOv8 web app for object detection on images and live webcam"
 readme = "README.md"
 license = "MIT"
-authors = [{ name = "Akram Khattabi" }]
+authors = [{ name = "Dhia" }]
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.118",
