@@ -140,6 +140,36 @@ JPEG encode, upload, annotated JPEG back) ran at **8-12.6 fps**. Over a real net
 the UI sends one frame at a time and never queues. Numbers vary with CPU load: with other heavy
 jobs on the same VPS, YOLO dropped below 1 fps.
 
+## Project structure
+
+```text
+backend/app/
+  main.py           FastAPI app: routes, upload limits, mode routing, video analysis
+  detector.py       Detection dataclass, Detector protocol, YOLO + stub detectors, drawing, JPEG helpers
+  faces.py          YuNet face detector + MobileFaceNet expression classifier
+  sign.py           MediaPipe hands -> ASL letters or gestures; WordBuilder for fingerspelling
+  sign_features.py  Landmark normalisation shared by training and inference
+  asl_classifier.py Pure-numpy ASL letter classifier (loads models/asl_letters.npz)
+  zoo.py            Model registry: checksummed downloads and the local cache
+  demo.py           CLI that runs a mode over the bundled samples
+backend/static/     Single-page web UI (vanilla JS)
+scripts/train_asl.py  Trains the ASL letter classifier
+tests/              pytest suite (stub detector by default; `slow` marker runs real models)
+```
+
+## Development
+
+```bash
+uv sync                         # install runtime + dev dependencies
+uv run pytest -q -m "not slow"  # fast tests (drop the marker to run real models)
+uv run ruff check .             # lint, including Google-style docstring rules
+uv run ruff format --check .    # formatting
+uv run mypy                     # type check (basic mode)
+uv run interrogate              # docstring coverage, fails under 90%
+```
+
+CI runs the same checks on every pull request.
+
 ## Quick start
 
 ```bash

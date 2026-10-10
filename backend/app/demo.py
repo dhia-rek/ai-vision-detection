@@ -19,11 +19,20 @@ import cv2
 from .detector import annotate
 from .main import SAMPLES_DIR, build_detector, list_samples
 
+# CLI --mode value -> sample folder name; both sign modes use the same sign samples.
 GROUPS = {"objects": "objects", "faces": "faces", "sign": "sign", "sign-gestures": "sign"}
 
 
 def save_gif(frames: list, path: Path, width: int = 640) -> None:
-    from PIL import Image
+    """Write BGR frames as a looping animated GIF (1.5 s per frame).
+
+    Args:
+        frames: Non-empty list of BGR images (numpy arrays, as from OpenCV).
+        path: Destination ``.gif`` file.
+        width: Every frame is resized to this width, keeping aspect ratio, to keep the
+            file small.
+    """
+    from PIL import Image  # only needed when saving a GIF
 
     imgs = []
     for f in frames:
@@ -34,6 +43,14 @@ def save_gif(frames: list, path: Path, width: int = 640) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run the detector for one mode over the bundled samples and print a table.
+
+    Args:
+        argv: Command-line arguments; ``None`` means ``sys.argv[1:]``.
+
+    Returns:
+        Process exit code: 0 on success, 1 if there are no samples for the mode.
+    """
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--mode", choices=sorted(GROUPS), default="objects")
     ap.add_argument("--out", type=Path, help="directory for annotated images and demo.gif")
@@ -49,6 +66,8 @@ def main(argv: list[str] | None = None) -> int:
     frames = []
     for name in samples:
         img = cv2.imread(str(SAMPLES_DIR / group / name))
+        if img is None:
+            raise FileNotFoundError(f"Could not read sample {name}")
         t0 = time.perf_counter()
         dets = detector.detect(img)
         ms = (time.perf_counter() - t0) * 1000

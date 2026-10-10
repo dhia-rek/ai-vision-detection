@@ -15,6 +15,10 @@ import numpy as np
 from .detector import Detection
 from .zoo import ensure_model
 
+ALIGNED_SIZE = 112  # side of the aligned face crop the expression model expects
+YUNET_NMS_THRESHOLD = 0.3  # YuNet non-max-suppression IoU threshold
+YUNET_TOP_K = 50  # YuNet candidate boxes kept before NMS
+
 EXPRESSIONS = ("angry", "disgust", "fear", "happy", "neutral", "sad", "surprised")
 
 # Reference landmark positions (eyes, nose tip, mouth corners) in the 112x112 aligned crop.
@@ -25,11 +29,25 @@ _REFERENCE = np.array(
 
 
 class ExpressionDetector:
+    """Detects faces and labels each with one of seven ``EXPRESSIONS``."""
+
     name = "yunet+mobilefacenet-fer"
 
-    def __init__(self, face_conf: float = 0.7, min_face: int = 24):
+    def __init__(self, face_conf: float = 0.7, min_face: int = 24) -> None:
+        """Load both models (downloading them on first use).
+
+        Args:
+            face_conf: YuNet score threshold for accepting a face.
+            min_face: Faces whose shorter side is below this many pixels are skipped;
+                the expression model is unreliable on tiny faces.
+        """
         self.detector = cv2.FaceDetectorYN.create(
-            str(ensure_model("face_detection_yunet_2023mar.onnx")), "", (320, 320), face_conf, 0.3, 50
+            str(ensure_model("face_detection_yunet_2023mar.onnx")),
+            "",
+            (320, 320),
+            face_conf,
+            YUNET_NMS_THRESHOLD,
+            YUNET_TOP_K,
         )
         self.classifier = cv2.dnn.readNet(
             str(ensure_model("facial_expression_recognition_mobilefacenet_2022july.onnx"))
@@ -38,8 +56,17 @@ class ExpressionDetector:
         self._lock = threading.Lock()
 
     def _classify(self, image: np.ndarray, landmarks: np.ndarray) -> np.ndarray:
+        """Return expression probabilities for one face.
+
+        Args:
+            image: Full BGR image.
+            landmarks: (5, 2) float32 YuNet landmarks: eyes, nose tip, mouth corners.
+
+        Returns:
+            Softmax probabilities, ordered as ``EXPRESSIONS``.
+        """
         matrix, _ = cv2.estimateAffinePartial2D(landmarks, _REFERENCE, method=cv2.LMEDS)
-        crop = cv2.warpAffine(image, matrix, (112, 112))
+        crop = cv2.warpAffine(image, matrix, (ALIGNED_SIZE, ALIGNED_SIZE))
         x = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
         x = (x - 0.5) / 0.5
         self.classifier.setInput(cv2.dnn.blobFromImage(x), "data")
@@ -48,6 +75,15 @@ class ExpressionDetector:
         return p / p.sum()
 
     def detect(self, image: np.ndarray) -> list[Detection]:
+        """Find faces and classify their expressions.
+
+        Holds a lock for the whole call since the OpenCV detector's input size is
+        mutable shared state. Boxes are clamped to the image bounds.
+
+        Returns:
+            One ``Detection`` per face labelled with the top expression; ``extra`` holds
+            ``face_confidence`` and the ``top3`` expression scores.
+        """
         h, w = image.shape[:2]
         with self._lock:
             self.detector.setInputSize((w, h))
