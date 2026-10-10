@@ -16,6 +16,7 @@ dependencies = [
     "ultralytics>=8.3",
     "torch>=2.6",
     "torchvision>=0.21",
+    "mediapipe>=0.10.20",
 ]
 
 [dependency-groups]
@@ -23,8 +24,11 @@ dev = ["pytest>=8.3", "httpx>=0.28", "ruff>=0.13"]
 
 [tool.uv]
 package = false
-# Ultralytics pulls in the GUI build of OpenCV; we only need the headless one.
-override-dependencies = ["opencv-python; sys_platform == 'never'"]
+# Ultralytics and MediaPipe pull in GUI builds of OpenCV; we only need the headless one.
+override-dependencies = [
+    "opencv-python; sys_platform == 'never'",
+    "opencv-contrib-python; sys_platform == 'never'",
+]
 
 # CPU-only torch on Linux (CI, Docker, HF Spaces); default wheels elsewhere.
 [tool.uv.sources]
