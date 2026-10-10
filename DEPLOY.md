@@ -1,9 +1,9 @@
 # Deploying to Hugging Face Spaces
 
 The repo ships a CPU-only `Dockerfile` that works as a [Docker Space](https://huggingface.co/docs/hub/spaces-sdks-docker).
-No secrets are needed: the app runs YOLOv8n on CPU and serves the bundled CC0 sample images.
+No secrets are needed: the app runs YOLO11n on CPU and serves the bundled CC0 sample images.
 
-> **Licence note.** Ultralytics and the YOLOv8 weights are AGPL-3.0. A public Space serves
+> **Licence note.** Ultralytics and the YOLO11 weights are AGPL-3.0. A public Space serves
 > the model over a network, so the AGPL applies: keep the Space's source public (a Docker Space
 > is) and keep the `LICENSE` notice. See the README licence section.
 
@@ -25,22 +25,22 @@ colorTo: purple
 sdk: docker
 app_port: 7860
 license: agpl-3.0
-short_description: YOLOv8 object detection on images and webcam (FastAPI)
+short_description: YOLO11 object detection on images and webcam (FastAPI)
 ---
 ```
 
-`license: agpl-3.0` because the deployed artefact bundles the AGPL YOLOv8 weights.
+`license: agpl-3.0` because the deployed artefact bundles the AGPL YOLO11 weights.
 
 ## 3. Push
 
 ```bash
 git remote add space https://huggingface.co/spaces/<user>/ai-vision-detection
-git push space enhance/showcase:main
+git push space feat/better-models:main
 ```
 
-The Space build uses only `pyproject.toml`, `uv.lock`, `yolov8n.pt` and `backend/` (see `.dockerignore`);
-`yolov8m.pt` (52 MB) is never copied. Hugging Face rejects files over 10 MB without Git LFS, so push from
-a branch where the large weights are tracked with LFS or removed (see README, "Large files").
+The Docker build installs from `pyproject.toml` / `uv.lock`, copies the backend and downloads
+verified model weights during the build. `.dockerignore` excludes `*.pt` files; no YOLO weights
+need to be committed or pushed with Git LFS. Push the branch containing the model changes.
 
 ## 4. Check
 
