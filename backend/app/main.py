@@ -1,5 +1,6 @@
-"""FastAPI app: object detection, facial expressions and ASL sign recognition
-on images, uploaded videos and live webcam frames.
+"""FastAPI app: detection, facial expressions and ASL sign recognition.
+
+Serves images, uploaded videos and live webcam frames.
 
 Modes (query parameter `mode`):
   objects  YOLOv8n, 80 COCO classes
@@ -8,7 +9,7 @@ Modes (query parameter `mode`):
 
 Environment variables:
   AVD_DETECTOR       "real" (default) or "stub" (no models, for tests/smoke)
-  AVD_WEIGHTS        YOLO weights path (default: downloaded yolov8n.pt, see models.py)
+  AVD_WEIGHTS        YOLO weights path (default: downloaded yolov8n.pt, see zoo.py)
   AVD_MODEL_DIR      where downloaded models are cached
   AVD_CONF           YOLO confidence threshold (default 0.25)
   AVD_MAX_UPLOAD_MB  image upload limit in MB (default 10)
@@ -30,6 +31,7 @@ from collections import Counter
 from pathlib import Path
 
 import cv2
+import numpy as np
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,6 +39,7 @@ from fastapi.responses import FileResponse, Response
 from PIL import Image
 
 from .detector import Detector, StubDetector, YoloDetector, annotate, decode_image, encode_jpeg
+from .sign import SIGN_MODES
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 STATIC_DIR = BACKEND_DIR / "static"
@@ -52,20 +55,42 @@ MODES = {
 SAMPLE_GROUPS = ("objects", "faces", "sign", "video")
 MAX_HEADER_DETECTIONS = 25  # keep X-Detections well under common 8 KB header limits
 MAX_VIDEO_FRAMES = 600  # hard cap on analysed frames per /api/video request
+UPLOAD_CHUNK_BYTES = 1 << 20  # read uploads 1 MiB at a time so size limits fail fast
+RESULT_JPEG_QUALITY = 85  # quality of the annotated image returned by /api/analyze
+FALLBACK_VIDEO_FPS = 25.0  # used when the container reports no frame rate
 
 
 def mode_key(mode: str, sign_mode: str = "spell") -> str:
+    """Validate request modes and combine them into a detector key.
+
+    Args:
+        mode: One of ``MODES``.
+        sign_mode: "spell" or "gestures"; only used when ``mode`` is "sign".
+
+    Returns:
+        "objects", "faces", "sign-spell" or "sign-gestures".
+
+    Raises:
+        HTTPException: 400 if either value is invalid.
+    """
     if mode not in MODES:
         raise HTTPException(status_code=400, detail=f"Unknown mode; use one of {sorted(MODES)}")
     if mode == "sign":
-        if sign_mode not in ("spell", "gestures"):
+        if sign_mode not in SIGN_MODES:
             raise HTTPException(status_code=400, detail="sign_mode must be 'spell' or 'gestures'")
         return f"sign-{sign_mode}"
     return mode
 
 
 def build_detector(key: str = "objects") -> Detector:
-    """Create the real detector for a mode key (objects, faces, sign-spell, sign-gestures)."""
+    """Create the real detector for a mode key (objects, faces, sign-spell, sign-gestures).
+
+    Heavy modules are imported lazily so unused modes cost nothing. If ``AVD_DETECTOR``
+    is "stub", a ``StubDetector`` is returned for every key.
+
+    Raises:
+        ValueError: If ``key`` is not a known mode key.
+    """
     if os.getenv("AVD_DETECTOR", "real").lower() == "stub":
         return StubDetector()
     if key == "objects":
@@ -85,6 +110,11 @@ def build_detector(key: str = "objects") -> Detector:
 
 
 def list_samples(group: str) -> list[str]:
+    """List bundled sample file names for a group, sorted.
+
+    Returns videos for "video" and images otherwise; an unknown group or missing
+    folder gives an empty list.
+    """
     folder = SAMPLES_DIR / group
     suffixes = VIDEO_SUFFIXES if group == "video" else IMAGE_SUFFIXES
     if group not in SAMPLE_GROUPS or not folder.is_dir():
@@ -93,7 +123,15 @@ def list_samples(group: str) -> list[str]:
 
 
 def create_app(detector: Detector | None = None) -> FastAPI:
-    """`detector`, if given, is used for every mode (tests pass a StubDetector)."""
+    """Build the FastAPI application and register all routes.
+
+    Upload and pixel limits and CORS origins are read from environment variables at
+    call time (see the module docstring).
+
+    Args:
+        detector: If given, used for every mode (tests pass a StubDetector); otherwise
+            detectors are built lazily per mode.
+    """
     app = FastAPI(title="AI Vision Detection API", version="2.0.0")
     max_bytes = int(float(os.getenv("AVD_MAX_UPLOAD_MB", "10")) * 1024 * 1024)
     max_video_bytes = int(float(os.getenv("AVD_MAX_VIDEO_MB", "50")) * 1024 * 1024)
@@ -109,7 +147,11 @@ def create_app(detector: Detector | None = None) -> FastAPI:
     build_lock = threading.Lock()
 
     def get_detector(key: str) -> Detector:
-        # Lazy: each model downloads/loads on the first request for its mode.
+        """Return the detector for a mode key, building and caching it on first use.
+
+        Lazy so each model downloads/loads on the first request for its mode; a lock
+        prevents two concurrent first requests from loading the same model twice.
+        """
         if detector is not None:
             return detector
         with build_lock:
@@ -117,12 +159,20 @@ def create_app(detector: Detector | None = None) -> FastAPI:
                 detectors[key] = build_detector(key)
             return detectors[key]
 
-    def decode_checked(raw: bytes):
-        # Read only the header first so a small file can't decode into a huge bitmap.
+    def decode_checked(raw: bytes) -> np.ndarray:
+        """Decode image bytes into a BGR array, enforcing the pixel limit.
+
+        Reads only the header first so a small file can't decode into a huge bitmap.
+
+        Raises:
+            HTTPException: 400 if undecodable, 413 if over ``max_pixels``.
+        """
         try:
             with Image.open(io.BytesIO(raw)) as probe:
                 width, height = probe.size
-        except Exception:
+        except Exception:  # noqa: BLE001
+            # Deliberately broad: PIL raises many parser-specific errors (OSError, SyntaxError,
+            # DecompressionBomb*, ...) on hostile input and all must map to a clean 400.
             raise HTTPException(status_code=400, detail="Could not decode image") from None
         if width * height > max_pixels:
             raise HTTPException(status_code=413, detail="Image dimensions too large")
@@ -131,7 +181,15 @@ def create_app(detector: Detector | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail="Could not decode image")
         return img
 
-    async def read_image(upload: UploadFile):
+    async def read_image(upload: UploadFile) -> np.ndarray:
+        """Validate and decode an uploaded image.
+
+        Reads at most ``max_bytes + 1`` bytes so oversized uploads are rejected without
+        buffering them all.
+
+        Raises:
+            HTTPException: 400 if not an image content type or undecodable, 413 if too large.
+        """
         if not (upload.content_type or "").startswith("image/"):
             raise HTTPException(status_code=400, detail="File must be an image")
         raw = await upload.read(max_bytes + 1)
@@ -139,12 +197,18 @@ def create_app(detector: Detector | None = None) -> FastAPI:
             raise HTTPException(status_code=413, detail="Image too large")
         return decode_checked(raw)
 
-    def analyze(img, key: str) -> dict:
+    def analyze(img: np.ndarray, key: str) -> dict:
+        """Run a mode on an image and build the ``/api/analyze`` response body.
+
+        Returns:
+            Dict with the annotated image as a base64 JPEG data URL, the detections,
+            their count, the model name and inference time in milliseconds.
+        """
         det = get_detector(key)
         t0 = time.perf_counter()
         detections = det.detect(img)
         ms = (time.perf_counter() - t0) * 1000
-        jpeg = encode_jpeg(annotate(img, detections), quality=85)
+        jpeg = encode_jpeg(annotate(img, detections), quality=RESULT_JPEG_QUALITY)
         return {
             "mode": key,
             # Inline data URL: uploads and results are never written to disk.
@@ -155,7 +219,18 @@ def create_app(detector: Detector | None = None) -> FastAPI:
             "inference_ms": round(ms, 1),
         }
 
-    def analyze_frame(img, key: str, quality: int) -> Response:
+    def analyze_frame(img: np.ndarray, key: str, quality: int) -> Response:
+        """Run a mode on a webcam frame and return the annotated JPEG.
+
+        Results travel in ``X-*`` headers. At most ``MAX_HEADER_DETECTIONS`` of the most
+        confident detections are listed (``X-Detections-Truncated`` flags when cut) to
+        stay under header size limits.
+
+        Args:
+            img: BGR frame.
+            key: Detector key from ``mode_key``.
+            quality: JPEG quality of the response image.
+        """
         det = get_detector(key)
         t0 = time.perf_counter()
         detections = det.detect(img)
@@ -174,11 +249,31 @@ def create_app(detector: Detector | None = None) -> FastAPI:
         )
 
     def analyze_video(path: str, key: str, fps: float, max_seconds: float) -> dict:
+        """Run a mode on sampled frames of a video file.
+
+        Every ``round(source_fps / fps)``-th frame is analysed (at least every frame),
+        stopping after ``max_seconds`` of video or ``MAX_VIDEO_FRAMES`` analysed frames.
+        In "sign-spell" mode the most confident hand per frame feeds a ``WordBuilder``
+        and the typed text is included.
+
+        Args:
+            path: Video file on disk (OpenCV cannot decode from memory).
+            key: Detector key from ``mode_key``.
+            fps: Target analysed frames per second.
+            max_seconds: Maximum video time to analyse.
+
+        Returns:
+            Summary dict with per-frame boxes, label counts and timing.
+
+        Raises:
+            HTTPException: 400 if the video cannot be decoded (or yields no frames),
+                413 if a frame exceeds ``max_pixels``.
+        """
         cap = cv2.VideoCapture(path)
         if not cap.isOpened():
             raise HTTPException(status_code=400, detail="Could not decode video")
         try:
-            src_fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+            src_fps = cap.get(cv2.CAP_PROP_FPS) or FALLBACK_VIDEO_FPS
             step = max(1, round(src_fps / fps))
             det = get_detector(key)
             builder = None
@@ -186,7 +281,9 @@ def create_app(detector: Detector | None = None) -> FastAPI:
                 from .sign import WordBuilder
 
                 builder = WordBuilder()
-            frames, counts, total_ms, idx = [], Counter(), 0.0, 0
+            frames: list[dict] = []
+            counts: Counter[str] = Counter()
+            total_ms, idx = 0.0, 0
             while True:
                 ok = cap.grab()
                 if not ok or idx / src_fps > max_seconds or len(frames) >= MAX_VIDEO_FRAMES:
@@ -230,15 +327,18 @@ def create_app(detector: Detector | None = None) -> FastAPI:
         return result
 
     @app.get("/", include_in_schema=False)
-    def root():
+    def root() -> FileResponse:
+        """Serve the single-page web UI."""
         return FileResponse(STATIC_DIR / "index.html")
 
     @app.get("/health")
-    def health():
+    def health() -> dict:
+        """Liveness probe."""
         return {"status": "ok"}
 
     @app.get("/api/modes")
-    def modes():
+    def modes() -> dict:
+        """List available modes and the registered models with their licences."""
         from .zoo import MODELS
 
         return {
@@ -288,7 +388,7 @@ def create_app(detector: Detector | None = None) -> FastAPI:
         with tempfile.NamedTemporaryFile(suffix=".video") as tmp:
             # Stream to disk in chunks so large uploads never sit in RAM.
             size = 0
-            while chunk := await file.read(1 << 20):
+            while chunk := await file.read(UPLOAD_CHUNK_BYTES):
                 size += len(chunk)
                 if size > max_video_bytes:
                     raise HTTPException(status_code=413, detail="Video too large")
@@ -298,11 +398,13 @@ def create_app(detector: Detector | None = None) -> FastAPI:
 
     # Backwards-compatible object-detection endpoints.
     @app.post("/detect/")
-    async def detect(file: UploadFile = File(...)):
+    async def detect(file: UploadFile = File(...)) -> dict:
+        """Legacy alias of ``/api/analyze`` fixed to object detection."""
         return await api_analyze(file, "objects", "spell")
 
     @app.post("/detect/frame")
-    async def detect_frame(frame: UploadFile = File(...), quality: int = Query(80, ge=10, le=95)):
+    async def detect_frame(frame: UploadFile = File(...), quality: int = Query(80, ge=10, le=95)) -> Response:
+        """Legacy alias of ``/api/frame`` fixed to object detection."""
         return await api_frame(frame, "objects", "spell", quality)
 
     @app.get("/demo/samples")
@@ -311,7 +413,15 @@ def create_app(detector: Detector | None = None) -> FastAPI:
         return {group: list_samples(group) for group in SAMPLE_GROUPS}
 
     @app.get("/demo/samples/{group}/{name}")
-    def demo_sample_file(group: str, name: str):
+    def demo_sample_file(group: str, name: str) -> FileResponse:
+        """Serve a bundled sample file.
+
+        Only names returned by ``list_samples`` are accepted, which also prevents path
+        traversal.
+
+        Raises:
+            HTTPException: 404 for unknown samples.
+        """
         if name not in list_samples(group):
             raise HTTPException(status_code=404, detail="Unknown sample")
         return FileResponse(SAMPLES_DIR / group / name)

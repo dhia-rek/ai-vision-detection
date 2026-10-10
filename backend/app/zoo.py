@@ -17,6 +17,8 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class ModelSpec:
+    """Metadata for one downloadable model file."""
+
     name: str
     url: str
     sha256: str
@@ -70,10 +72,12 @@ _verified: set[str] = set()
 
 
 def model_dir() -> Path:
+    """Return the model cache directory: ``$AVD_MODEL_DIR`` or the per-user default."""
     return Path(os.getenv("AVD_MODEL_DIR", Path.home() / ".cache" / "ai-vision-detection" / "models"))
 
 
 def _sha256(path: Path) -> str:
+    """Return the hex SHA-256 of a file, read in 1 MiB chunks to bound memory use."""
     h = hashlib.sha256()
     with path.open("rb") as f:
         for chunk in iter(lambda: f.read(1 << 20), b""):
@@ -82,7 +86,23 @@ def _sha256(path: Path) -> str:
 
 
 def ensure_model(name: str) -> Path:
-    """Return the local path of a registered model, downloading it on first use."""
+    """Return the local path of a registered model, downloading it on first use.
+
+    Thread-safe (one global lock, so downloads are serialised). A cached file is
+    checksummed once per process; a corrupt one is deleted and re-downloaded. Downloads
+    go to a temporary file in the same directory and are verified before being moved
+    into place.
+
+    Args:
+        name: Key of ``MODELS``.
+
+    Returns:
+        Path of the verified model file.
+
+    Raises:
+        KeyError: If ``name`` is not a registered model.
+        RuntimeError: If the downloaded file's checksum does not match.
+    """
     spec = MODELS[name]
     path = model_dir() / name
     with _lock:

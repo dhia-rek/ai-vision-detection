@@ -13,11 +13,15 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from .detector import Detection
 from .zoo import ensure_model
+
+if TYPE_CHECKING:
+    from .asl_classifier import AslLetterClassifier
 
 ASL_MODEL = Path(__file__).resolve().parent / "models" / "asl_letters.npz"
 
@@ -36,10 +40,23 @@ SIGN_MODES = ("spell", "gestures")
 
 
 class SignDetector:
-    def __init__(self, mode: str = "spell", min_confidence: float = 0.5, max_hands: int = 2):
+    """MediaPipe hand detector that labels each hand as an ASL letter or a gesture."""
+
+    def __init__(self, mode: str = "spell", min_confidence: float = 0.5, max_hands: int = 2) -> None:
+        """Load MediaPipe (and the letter classifier in spell mode).
+
+        Args:
+            mode: One of ``SIGN_MODES``: "spell" (ASL letters) or "gestures".
+            min_confidence: Detections below this get ``extra["low_confidence"] = True``;
+                they are still returned.
+            max_hands: Maximum number of hands MediaPipe looks for.
+
+        Raises:
+            ValueError: If ``mode`` is not in ``SIGN_MODES``.
+        """
         if mode not in SIGN_MODES:
             raise ValueError(f"sign mode must be one of {SIGN_MODES}")
-        import mediapipe as mp
+        import mediapipe as mp  # heavy imports, only when actually used
         from mediapipe.tasks.python import BaseOptions, vision
 
         self._mp = mp
@@ -52,7 +69,7 @@ class SignDetector:
         self.recognizer = vision.GestureRecognizer.create_from_options(options)
         self.mode = mode
         self.min_confidence = min_confidence
-        self.letters = None
+        self.letters: AslLetterClassifier | None = None
         if mode == "spell":
             from .asl_classifier import AslLetterClassifier
 
@@ -61,7 +78,19 @@ class SignDetector:
         self._lock = threading.Lock()
 
     def detect(self, image: np.ndarray) -> list[Detection]:
+        """Detect hands in a BGR image.
+
+        In spell mode the label is the predicted letter and ``extra`` has ``top3``; in
+        gestures mode the label is the mapped gesture meaning ("no gesture" if
+        MediaPipe's gesture is missing or unmapped) and ``extra`` has the raw ``gesture``
+        name. ``extra["handedness"]`` is always set. The box is the landmark bounds
+        padded by 10% of the larger side and clamped to the image; ``points`` are pixels.
+
+        Returns:
+            One ``Detection`` per hand.
+        """
         h, w = image.shape[:2]
+        # MediaPipe expects RGB; reverse the channel axis and make it contiguous.
         rgb = np.ascontiguousarray(image[:, :, ::-1])
         mp_image = self._mp.Image(image_format=self._mp.ImageFormat.SRGB, data=rgb)
         with self._lock:
@@ -73,6 +102,7 @@ class SignDetector:
             gesture = result.gestures[i][0] if result.gestures and result.gestures[i] else None
             extra = {"handedness": handed}
             if self.mode == "spell":
+                assert self.letters is not None  # set in __init__ when mode == "spell"
                 letter, prob, top3 = self.letters.predict(pts, handed)
                 label, conf = letter, prob
                 extra["top3"] = {k: round(v, 4) for k, v in top3}
@@ -120,7 +150,21 @@ class WordBuilder:
     _last_seen: float | None = None
 
     def feed(self, letter: str | None, confidence: float, t: float) -> str | None:
-        """Feed one frame at time `t` (seconds). Returns the character committed, if any."""
+        """Feed one frame observed at time `t` (seconds).
+
+        A missing or low-confidence letter resets the current hold, so the same letter
+        can be typed again afterwards.
+
+        Args:
+            letter: Predicted letter, or None when no hand is visible.
+            confidence: Confidence of the prediction; below ``min_confidence`` counts as
+                no letter.
+            t: Frame timestamp in seconds, non-decreasing.
+
+        Returns:
+            The character appended to ``text`` by this frame (a letter or a space), or
+            None if nothing was committed.
+        """
         if letter is None or confidence < self.min_confidence:
             self._current, self._committed = None, False
             if (
