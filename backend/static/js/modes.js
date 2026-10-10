@@ -3,7 +3,7 @@
  *
  * A mode is a panel (`.insight[data-panel]` in index.html), a button in `#modeSwitch`, and one
  * `registerMode()` call. The shell (main.js) handles the switch, the panel visibility, the title,
- * the number-key shortcut, the empty-state text and the API query; the mode only renders its panel.
+ * the number-key shortcut and the empty-state text; the mode only renders its panel.
  *
  * @typedef {object} ModeDef
  * @property {string}  id          'objects' | 'faces' | 'sign' | your own; also `data-mode` and the `?mode=` value
@@ -12,7 +12,6 @@
  * @property {string|function(object): string} sub  panel subheading (a function receives the shared `state`)
  * @property {string}  empty       one line shown in the empty state ("what does this mode do")
  * @property {string}  panel       id of the panel element to show, e.g. 'insightObjects'
- * @property {function(object): string} [query]   query string for POST /api/analyze; default `mode=<id>`
  * @property {boolean} [draws]     true (default) to draw boxes/skeletons from the detections
  * @property {function(object): void} [onEnter]   the mode became active (ctx = {state})
  * @property {function(object): void} [onLeave]   the mode is being left
@@ -27,7 +26,7 @@ const modes = new Map();
 /** Register (or replace) a mode. Call it at module load, before main.js initialises. */
 export function registerMode(def) {
   if (!def || !def.id || !def.panel) throw new Error('registerMode needs {id, panel}');
-  modes.set(def.id, { draws: true, query: () => `mode=${def.id}`, ...def });
+  modes.set(def.id, { draws: true, ...def });
 }
 
 export function getMode(id) { return modes.get(id); }
