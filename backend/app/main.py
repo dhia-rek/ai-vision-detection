@@ -170,8 +170,9 @@ def create_app(detector: Detector | None = None) -> FastAPI:
         try:
             with Image.open(io.BytesIO(raw)) as probe:
                 width, height = probe.size
-        except (OSError, ValueError, SyntaxError, Image.DecompressionBombError):
-            # PIL raises UnidentifiedImageError (an OSError) for non-images.
+        except Exception:  # noqa: BLE001
+            # Deliberately broad: PIL raises many parser-specific errors (OSError, SyntaxError,
+            # DecompressionBomb*, ...) on hostile input and all must map to a clean 400.
             raise HTTPException(status_code=400, detail="Could not decode image") from None
         if width * height > max_pixels:
             raise HTTPException(status_code=413, detail="Image dimensions too large")
