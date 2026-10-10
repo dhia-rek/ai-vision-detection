@@ -105,8 +105,6 @@
 </symbol>
 <symbol id="i-space" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 17v1c0 .5-.5 1-1 1H3c-.5 0-1-.5-1-1v-1"/>
 </symbol>
-<symbol id="i-stop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/>
-</symbol>
 <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/>
   <path d="M12 2v2"/>
   <path d="M12 20v2"/>
@@ -222,7 +220,7 @@
         <ul class="empty-steps" aria-label="How the camera is used">
           <li><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg><span>Your browser will ask for camera access.</span></li>
           <li><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg><span>Frames are analysed on the server and never stored.</span></li>
-          <li><svg class="icon" aria-hidden="true"><use href="#i-stop"/></svg><span>Stop at any time; the camera light goes off.</span></li>
+          <li><svg class="icon" aria-hidden="true"><use href="#i-camera-off"/></svg><span>Stop at any time; the camera light goes off.</span></li>
         </ul>
       </div>
 
@@ -290,8 +288,8 @@
         <span>Detections</span>
       </button>
       <span class="spacer"></span>
-      <button type="button" class="btn btn-quiet" id="stopBtn">
-        <svg class="icon" aria-hidden="true"><use href="#i-stop"/></svg><span>Stop camera</span>
+      <button type="button" class="btn btn-quiet" id="stopBtn" title="Stop camera">
+        <svg class="icon" aria-hidden="true"><use href="#i-camera-off"/></svg><span>Stop camera</span>
       </button>
     </div>
   </section>
@@ -447,10 +445,10 @@
 
 <div class="toasts" id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
 
-<dialog id="helpDialog" class="dialog" aria-labelledby="helpTitle">
+<dialog id="helpDialog" class="dialog" aria-labelledby="shortcutsTitle">
   <form method="dialog" class="dialog-body">
     <div class="dialog-head">
-      <h2 id="helpTitle">Keyboard shortcuts</h2>
+      <h2 id="shortcutsTitle">Keyboard shortcuts</h2>
       <button class="icon-btn" aria-label="Close"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
     </div>
     <dl class="shortcuts">
