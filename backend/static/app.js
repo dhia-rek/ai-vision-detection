@@ -11,7 +11,7 @@ const $ = (id) => document.getElementById(id);
 const MAX_WIDTH = 640, JPEG_QUALITY = 0.7, MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const GROUPS = ['objects', 'faces', 'sign'];
 const EXPRESSIONS = ['angry', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprised'];
-const MAX_FACES = 4, MAX_TRACKS = 60, SPARK_POINTS = 40;
+const MAX_FACES = 4, MAX_TRACKS = 60, SPARK_POINTS = 40, REQUEST_TIMEOUT_MS = 60000;
 
 /** Fixed colour per object class (hash of the class name picks the slot, so a class keeps its colour). */
 const PALETTE = ['#38bdf8', '#f472b6', '#facc15', '#4ade80', '#fb923c', '#a78bfa',
@@ -31,7 +31,7 @@ const MODE_META = {
   sign: { title: 'Sign language', sub: 'ASL fingerspelling and hand gestures' },
 };
 const EMPTY_META = {
-  webcam: { icon: 'camera', title: 'Start the camera', text: 'Frames are analysed on the server and never stored.' },
+  webcam: { icon: 'camera', title: 'Start the camera', text: 'Nothing is saved: frames are analysed on the server and discarded.' },
   video: { icon: 'film', title: 'Analyse a video', text: 'Pick a file or one of the samples below.', button: 'Choose a video' },
   image: { icon: 'image', title: 'Analyse an image', text: 'Pick a file or one of the samples below.', button: 'Choose an image' },
 };
@@ -51,6 +51,10 @@ let stream = null;
 let loopGen = 0;            // bumping this cancels the running frame loop
 let loopRunning = false;
 let inflight = false;       // one request in flight at a time
+let feedEpoch = 0;          // bumped by invalidateFeed(); responses from an older epoch are dropped
+let feedCtl = null;         // AbortController of the in-flight live request
+let sampleEpoch = 0;        // bumped when a sample download is superseded
+let camEpoch = 0;           // bumped when a pending camera permission request is superseded
 let imageGen = 0;
 let stillFile = null;       // the image currently shown (re-analysed when the mode changes)
 let samples = { objects: [], faces: [], sign: [], video: [] };
@@ -419,10 +423,9 @@ function setRing(p) {
   v.style.strokeDashoffset = (RING_C * (1 - clamp(p, 0, 1))).toFixed(2);
 }
 
-let lastAnnounce = 0, lastSummary = '';
+let lastSummary = '', pendingSummary = null, announceTimer = 0;
+/** Update the screen-reader summary only when the picture has been stable for a moment (no per-frame chatter). */
 function announce(dets) {
-  const now = performance.now();
-  if (now - lastAnnounce < 1500) return;
   let text;
   if (!dets.length) text = state.mode === 'sign' ? 'No hand in view' : state.mode === 'faces' ? 'No face in view' : 'Nothing detected';
   else if (state.mode === 'objects') {
@@ -431,11 +434,13 @@ function announce(dets) {
     text = [...c].map(([k, n]) => `${n} ${k}`).join(', ');
   } else {
     const b = dets.reduce((a, d) => (d.confidence > a.confidence ? d : a));
-    text = `${b.class}, ${pct(b.confidence)}`;
+    text = b.class;
   }
-  if (text === lastSummary) return;
-  lastSummary = text; lastAnnounce = now;
-  $('liveSummary').textContent = text;
+  if (text === lastSummary) { clearTimeout(announceTimer); pendingSummary = null; return; }
+  if (text === pendingSummary) return;
+  pendingSummary = text;
+  clearTimeout(announceTimer);
+  announceTimer = setTimeout(() => { lastSummary = text; pendingSummary = null; $('liveSummary').textContent = text; }, 900);
 }
 
 // ---------- status bar ----------
@@ -531,11 +536,25 @@ function sourceReady() {
   return liveSource() && el.video.videoWidth > 0 && !el.video.paused && !el.video.ended && (state.source !== 'webcam' || !!stream);
 }
 
+/**
+ * Invalidate everything in flight for the live feed (mode, source, seek or stop changed): the pending
+ * request is aborted and its response, if it still arrives, is ignored.
+ */
+function invalidateFeed() {
+  feedEpoch++;
+  if (feedCtl) feedCtl.abort();
+  feedCtl = null;
+  inflight = false;
+}
+
 /** Grab the current video frame, send it, and apply the response. Resolves when the round trip is over. */
 async function sendFrame(gen) {
   if (inflight) return;
   inflight = true;
-  const modeKey = `${state.mode}/${state.sign}`;
+  const epoch = feedEpoch;
+  const ctl = new AbortController();
+  feedCtl = ctl;
+  const timer = setTimeout(() => ctl.abort(), REQUEST_TIMEOUT_MS);
   try {
     const t0 = performance.now();
     const vw = el.video.videoWidth, vh = el.video.videoHeight;
@@ -548,11 +567,11 @@ async function sendFrame(gen) {
     fd.append('file', blob, 'frame.jpg');
     const spellAtSend = spellActive();
     if (!firstResult) setStatus('busy', 'Loading model');
-    const res = await fetch(`/api/analyze?${qs()}`, { method: 'POST', body: fd });
+    const res = await fetch(`/api/analyze?${qs()}`, { method: 'POST', body: fd, signal: ctl.signal });
     if (!res.ok) throw new Error(`Backend error: ${res.status} ${(await res.text().catch(() => '')).slice(0, 200)}`);
     const data = await res.json();
     const t1 = performance.now();
-    if (gen !== loopGen || modeKey !== `${state.mode}/${state.sign}`) return;   // stale: mode or source changed
+    if (epoch !== feedEpoch || gen !== loopGen) return;   // stale: mode, source or position changed meanwhile
     firstResult = true;
     const dets = applyResult(data);
     recordFrame(t1, t1 - t0, data);
@@ -563,11 +582,12 @@ async function sendFrame(gen) {
     clearError();
     if (!el.video.paused) setStatus('running', state.source === 'video' ? 'Playing' : 'Live');
   } catch (err) {
-    if (gen !== loopGen) return;
-    showError(err.message || String(err));
+    if (epoch !== feedEpoch || gen !== loopGen) return;
+    showError(err.name === 'AbortError' ? 'The server took too long to answer.' : (err.message || String(err)));
     await sleep(1000);
   } finally {
-    inflight = false;
+    clearTimeout(timer);
+    if (epoch === feedEpoch) { inflight = false; feedCtl = null; }
   }
 }
 
@@ -590,20 +610,24 @@ async function frameLoop(gen) {
 }
 function mediaLive() { return (state.source === 'webcam' && !!stream) || (state.source === 'video' && !!el.video.getAttribute('src') && !el.video.ended); }
 function startLoop() { loopGen++; frameLoop(loopGen); }
-function stopLoop() { loopGen++; }
+function stopLoop() { loopGen++; invalidateFeed(); }
 
 // ---------- webcam ----------
 async function startCamera() {
   clearError();
   if (stream) return;
   const btn = $('startBtn');
+  const mine = ++camEpoch;
+  let media = null;
   try {
     btn.disabled = true;
     setStatus('busy', 'Starting camera');
-    stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
-    if (state.source !== 'webcam') { stopCameraTracks(); return; }
+    media = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+    if (mine !== camEpoch || state.source !== 'webcam') { media.getTracks().forEach((t) => t.stop()); return; }
+    stream = media;
     el.video.srcObject = stream;
     await el.video.play().catch(() => {});
+    if (mine !== camEpoch) return;   // stopped or left while the video was starting
     resetStats();
     firstResult = false;
     builder.reset();
@@ -612,6 +636,7 @@ async function startCamera() {
     startLoop();
     el.viewport.focus({ preventScroll: true });
   } catch (err) {
+    if (mine !== camEpoch) return;
     stream = null;
     const denied = err && (err.name === 'NotAllowedError' || err.name === 'SecurityError');
     showError(denied ? 'Camera access was blocked. Allow it in the browser, or use a video or an image.' : (err.message || String(err)));
@@ -624,6 +649,7 @@ function stopCameraTracks() {
   el.video.srcObject = null;
 }
 function stopCamera() {
+  camEpoch++;
   stopLoop();
   stopCameraTracks();
   clearTracks();
@@ -672,8 +698,10 @@ el.video.addEventListener('timeupdate', () => {
   if (state.source !== 'video' || !el.video.duration) return;
   $('seek').value = String(Math.round((el.video.currentTime / el.video.duration) * 1000));
 });
+el.video.addEventListener('seeking', () => { if (state.source === 'video') invalidateFeed(); });
 el.video.addEventListener('seeked', () => {
-  if (liveSource() && el.video.paused && !inflight && el.video.videoWidth > 0) sendFrame(loopGen);
+  // While paused the loop idles, so analyse the new position once; playing resumes the loop by itself.
+  if (state.source === 'video' && el.video.paused && el.video.videoWidth > 0) sendFrame(loopGen);
 });
 $('seek').addEventListener('input', (e) => {
   if (el.video.duration) el.video.currentTime = (Number(e.target.value) / 1000) * el.video.duration;
@@ -751,17 +779,21 @@ async function openSample(group, name, kind) {
     return;
   }
   setSource('image');
+  const mine = ++sampleEpoch;   // a later click, source change or file drop supersedes this download
   try {
     setStatus('busy');
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Could not load sample (${res.status})`);
     const blob = await res.blob();
+    if (mine !== sampleEpoch || state.source !== 'image') return;
     loadImage(new File([blob], name, { type: blob.type || 'image/jpeg' }));
-  } catch (err) { showError(err.message || String(err)); }
+  } catch (err) { if (mine === sampleEpoch) showError(err.message || String(err)); }
 }
 
 /** Free the current media and its results (not the source selection). */
 function releaseMedia() {
+  camEpoch++;
+  sampleEpoch++;
   stopLoop();
   imageGen++;
   if (stream) stopCameraTracks();
@@ -896,8 +928,9 @@ function setMode(mode, sign) {
   if (sign) state.sign = sign;
   if (!changed) return syncUI();
   imageGen++;
+  invalidateFeed();
   clearTracks();
-  lastSummary = ''; lastAnnounce = 0;
+  lastSummary = ''; pendingSummary = null; clearTimeout(announceTimer);
   builder.clear();
   firstResult = false;
   renderInsights([]);
