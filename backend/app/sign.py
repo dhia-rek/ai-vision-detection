@@ -36,6 +36,7 @@ GESTURES = {
     "Closed_Fist": "closed fist",
 }
 
+LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 SIGN_MODES = ("spell", "gestures")
 
 
@@ -100,12 +101,16 @@ class SignDetector:
             pts = np.array([[p.x, p.y, p.z] for p in landmarks], dtype=np.float32)
             handed = result.handedness[i][0].category_name if result.handedness else None
             gesture = result.gestures[i][0] if result.gestures and result.gestures[i] else None
-            extra = {"handedness": handed}
+            extra = {"handedness": handed, "landmarks": np.round(pts, 4).tolist()}
             if self.mode == "spell":
                 assert self.letters is not None  # set in __init__ when mode == "spell"
-                letter, prob, top3 = self.letters.predict(pts, handed)
-                label, conf = letter, prob
-                extra["top3"] = {k: round(v, 4) for k, v in top3}
+                probs = self.letters.predict_proba(pts, w / h)
+                order = np.argsort(probs)[::-1]
+                label, conf = self.letters.classes[order[0]], float(probs[order[0]])
+                extra["top3"] = {self.letters.classes[i]: round(float(probs[i]), 4) for i in order[:3]}
+                extra["scores"] = {
+                    c: round(float(v), 3) for c, v in zip(self.letters.classes, probs, strict=True)
+                }
             else:
                 if gesture is None or gesture.category_name not in GESTURES:
                     label, conf = "no gesture", float(gesture.score) if gesture else 0.0
@@ -185,3 +190,78 @@ class WordBuilder:
             self.text += letter
             return letter
         return None
+
+
+@dataclass
+class LetterSmoother:
+    """Smooth per-frame ASL letter probabilities with temporal hysteresis.
+
+    Args:
+        alpha: Weight of the newest probability vector in the exponential average.
+        switch_margin: Required probability advantage before changing the current letter.
+        min_conf: Minimum smoothed confidence that yields a letter.
+        gap_reset_s: Missing-hand duration that resets the probability state.
+    """
+
+    alpha: float = 0.45
+    switch_margin: float = 0.12
+    min_conf: float = 0.5
+    gap_reset_s: float = 0.6
+    ema: dict[str, float] | None = None
+    current: str | None = None
+    last_seen: float | None = None
+
+    def reset(self) -> None:
+        """Clear the averaged probabilities and current letter."""
+        self.ema = None
+        self.current = None
+        self.last_seen = None
+
+    def feed(self, scores: dict[str, float] | None, t: float) -> tuple[str | None, float]:
+        """Feed letter probabilities at timestamp ``t`` and return the smoothed result.
+
+        A missing hand returns ``(None, 0)`` and clears state after a sufficiently long gap.
+        Probabilities are averaged by letter key; a new winner must exceed the current
+        letter by ``switch_margin`` before it can replace it.
+
+        Args:
+            scores: Probability for each letter, or ``None`` when no hand is visible.
+            t: Monotonic frame time in seconds.
+
+        Returns:
+            The selected letter (or ``None`` below the confidence threshold) and its
+            smoothed probability.
+        """
+        if self.last_seen is not None and t - self.last_seen > self.gap_reset_s:
+            self.reset()
+        if scores is None:
+            return None, 0.0
+        if self.ema is None:
+            self.ema = {letter: float(scores.get(letter, 0.0)) for letter in LETTERS}
+        else:
+            self.ema = {
+                letter: self.alpha * float(scores.get(letter, 0.0)) + (1 - self.alpha) * self.ema[letter]
+                for letter in LETTERS
+            }
+        self.last_seen = t
+        winner = max(self.ema, key=self.ema.__getitem__)
+        if self.current is None or self.ema[winner] > self.ema[self.current] + self.switch_margin:
+            self.current = winner
+        confidence = self.ema[self.current]
+        return (self.current if confidence >= self.min_conf else None), confidence
+
+
+def smooth_letters(
+    frames: list[tuple[float, dict[str, float] | None]],
+) -> list[tuple[str | None, float]]:
+    """Smooth an ordered sequence of score vectors for video transcription.
+
+    Args:
+        frames: Ordered ``(timestamp, scores)`` pairs, with ``None`` scores when no hand is
+            visible. Timestamps are seconds, so missing-hand reset timing matches video time.
+
+    Returns:
+        Smoothed letter and confidence pairs, one for each input frame.
+    """
+    smoother = LetterSmoother()
+    return [smoother.feed(scores, t) for t, scores in frames]

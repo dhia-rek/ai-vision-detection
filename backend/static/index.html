@@ -257,6 +257,7 @@
       <div class="segmented segmented-small hidden" id="signSwitch" role="radiogroup" aria-label="Sign language mode">
         <button type="button" class="seg" role="radio" data-sign="spell" aria-checked="true">Letters</button>
         <button type="button" class="seg" role="radio" data-sign="gestures" aria-checked="false">Gestures</button>
+        <button type="button" class="seg" role="radio" data-sign="record" aria-checked="false">Record</button>
       </div>
     </header>
 
@@ -304,6 +305,19 @@
           <button type="button" class="btn btn-quiet" id="clearBtn"><svg class="icon" aria-hidden="true"><use href="#i-eraser"/></svg><span>Clear</span></button>
         </div>
       </div>
+      <section class="record-panel hidden" id="recordPanel" aria-labelledby="recordTitle">
+        <h2 id="recordTitle">Landmark recording</h2>
+        <label for="recordLetter">Letter label</label>
+        <select id="recordLetter" aria-label="Letter to record"></select>
+        <div class="record-actions">
+          <button type="button" class="btn btn-primary" id="recordToggle" aria-pressed="false" aria-keyshortcuts="R">Start recording <kbd>R</kbd></button>
+          <button type="button" class="btn" id="downloadRecord">Download JSON</button>
+          <button type="button" class="btn btn-quiet" id="clearRecord">Clear</button>
+        </div>
+        <p class="record-count" id="recordCounts" aria-live="polite">0 samples total</p>
+        <p class="record-status" id="recordStatus" role="status" aria-live="polite">Recording is off.</p>
+        <p class="record-privacy">Only the 21 hand landmarks are stored, never images. Recordings stay in this browser (localStorage) until downloaded or cleared.</p>
+      </section>
       <p class="none hidden" id="signImageNote">Letters are read from a single static hand shape. J and Z need motion and are unreliable.</p>
     </div>
 
