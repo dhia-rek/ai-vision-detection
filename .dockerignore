@@ -1,0 +1,10 @@
+.git
+.venv
+.agent-scratch
+**/__pycache__
+**/.DS_Store
+docs
+tests
+yolov8m.pt
+backend/yolov8n.pt
+backend/app/yolov8n.pt

@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Vision - Détection en Temps Réel (CAM)</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 1100px;
+            width: 100%;
+            padding: 28px;
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 18px;
+            font-size: 26px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .top-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+            margin-bottom: 18px;
+        }
+
+        @media (max-width: 900px) {
+            .top-row { grid-template-columns: 1fr; }
+        }
+
+        .panel {
+            border-radius: 12px;
+            border: 1px solid #e0e4ff;
+            background: #f8f9ff;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 12px 14px;
+            background: #eef1ff;
+            color: #667eea;
+            font-weight: 700;
+            font-size: 14px;
+            border-bottom: 1px solid #e0e4ff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .media {
+            width: 100%;
+            display: block;
+            background: #f0f2ff;
+            object-fit: contain;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+            margin: 14px 0;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.15s ease;
+        }
+
+        button:active { transform: scale(0.98); }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover { box-shadow: 0 10px 20px rgba(102, 126, 234, 0.25); }
+
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #667eea;
+            border: 2px solid #667eea;
+        }
+
+        .btn-secondary:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .status-bar {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        @media (max-width: 900px) {
+            .status-bar { grid-template-columns: 1fr; }
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+            padding: 14px;
+            border-radius: 12px;
+            border: 1px solid #e0e4ff;
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            margin-bottom: 6px;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .error-message {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 10px;
+            padding: 12px 14px;
+            color: #dc2626;
+            display: none;
+            margin-top: 12px;
+            font-weight: 600;
+        }
+
+        .error-message.show { display: block; }
+
+        .small {
+            font-size: 12px;
+            color: #666;
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        .spinner {
+            display: none;
+            width: 18px;
+            height: 18px;
+            border: 3px solid rgba(255,255,255,0.35);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .spinner.on { display: inline-block; }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .video-wrap, .img-wrap { padding: 10px; }
+        video { width: 100%; border-radius: 0; }
+        img { width: 100%; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🎯 AI Vision Detection (CAM)</h1>
+
+    <div class="controls">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;align-items:center;width:100%">
+            <button id="webcamModeBtn" class="btn-primary">Webcam (Live)</button>
+            <button id="uploadModeBtn" class="btn-secondary">Upload Image / Demo</button>
+        </div>
+
+        <div style="height:12px"></div>
+
+        <div id="webcamControls" style="display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;width:100%">
+            <button id="startBtn" class="btn-primary">Start Camera</button>
+            <button id="stopBtn" class="btn-secondary" style="display:none;">Stop Camera</button>
+            <div style="display:flex;align-items:center;gap:10px;">
+                <span id="fpsLabel" style="font-weight:700;color:#667eea;">FPS: -</span>
+                <span class="spinner" id="busySpinner"></span>
+            </div>
+        </div>
+
+        <div id="uploadControls" style="display:none;width:100%">
+            <div class="button-group" style="justify-content:center">
+                <span class="small" style="margin-top:0">Drag & drop below or click to select an image</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="webcamMode" class="top-row">
+        <div class="panel">
+            <div class="panel-header">
+                <span>Live Camera</span>
+            </div>
+            <div class="video-wrap">
+                <video id="video" class="media" autoplay playsinline muted></video>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">
+                <span>Detection (Annotated)</span>
+                <span id="objectsBadgeWebcam" style="font-size:12px;font-weight:800;color:#764ba2;">0 objects</span>
+            </div>
+            <div class="img-wrap">
+                <img id="resultImgWebcam" class="media" alt="Annotated frame" style="height:360px;" />
+            </div>
+        </div>
+    </div>
+
+    <div id="uploadMode" style="display:none;">
+        <div class="panel" style="margin-bottom:18px;">
+            <div class="panel-header">
+                <span>Upload Image</span>
+            </div>
+            <div style="padding:16px;">
+                <div id="uploadBox" class="upload-box" style="border:3px dashed #667eea;border-radius:12px;padding:28px;text-align:center;background:#f8f9ff;cursor:pointer;">
+                    <div class="upload-icon" style="font-size:38px;margin-bottom:10px;">📸</div>
+                    <div class="upload-text" style="font-size:15px;color:#555;margin-bottom:6px;">Drag and drop your image here</div>
+                    <div class="upload-hint" style="font-size:13px;color:#999;">or click to select a file</div>
+                    <input type="file" id="fileInput" accept="image/*" />
+                </div>
+                <div id="demoSamples" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;">
+                    <span class="small" style="margin-top:0">No camera? Try a bundled sample:</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="top-row">
+            <div class="panel">
+                <div class="panel-header">
+                    <span>Original</span>
+                </div>
+                <div class="img-wrap">
+                    <img id="originalImg" class="media" alt="Original image" style="height:360px;" />
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <span>Detection (Annotated)</span>
+                    <span id="objectsBadgeUpload" style="font-size:12px;font-weight:800;color:#764ba2;">0 objects</span>
+                </div>
+                <div class="img-wrap">
+                    <img id="resultImgUpload" class="media" alt="Detection result" style="height:360px;" />
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <div class="stat-card">
+            <div class="stat-label">Status</div>
+            <div class="stat-value" id="statusValue">Idle</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Last Objects</div>
+            <div class="stat-value" id="countValue">0</div>
+        </div>
+    </div>
+
+    <div class="error-message" id="errorMessage"></div>
+
+    <div class="small" id="cameraHint">If camera access is blocked, allow permissions in your browser settings.</div>
+    <div class="small" id="uploadHint" style="display:none;">Uploads are processed and the annotated result is displayed on the right.</div>
+</div>
+
+<script>
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const video = document.getElementById('video');
+    const resultImgWebcam = document.getElementById('resultImgWebcam');
+    const resultImgUpload = document.getElementById('resultImgUpload');
+
+    const originalImg = document.getElementById('originalImg');
+
+    const errorMessage = document.getElementById('errorMessage');
+    const statusValue = document.getElementById('statusValue');
+    const countValue = document.getElementById('countValue');
+    const objectsBadgeWebcam = document.getElementById('objectsBadgeWebcam');
+    const objectsBadgeUpload = document.getElementById('objectsBadgeUpload');
+
+    const fpsLabel = document.getElementById('fpsLabel');
+    const busySpinner = document.getElementById('busySpinner');
+
+    const webcamModeBtn = document.getElementById('webcamModeBtn');
+    const uploadModeBtn = document.getElementById('uploadModeBtn');
+    const webcamMode = document.getElementById('webcamMode');
+    const uploadMode = document.getElementById('uploadMode');
+    const cameraHint = document.getElementById('cameraHint');
+    const uploadHint = document.getElementById('uploadHint');
+    const webcamControls = document.getElementById('webcamControls');
+    const uploadControls = document.getElementById('uploadControls');
+
+    const uploadBox = document.getElementById('uploadBox');
+    const fileInput = document.getElementById('fileInput');
+
+    let stream = null;
+    let timer = null;
+    let busy = false;
+    let lastFrameTs = 0;
+
+    let currentMode = 'webcam';
+
+
+    // Tune these for performance
+    const TARGET_FPS = 8; // lower = faster / less load
+    const FRAME_INTERVAL_MS = Math.floor(1000 / TARGET_FPS);
+    const JPEG_QUALITY = 75; // 60-85 typical
+    const MAX_WIDTH = 640; // resize before encoding
+
+    function showError(msg) {
+        errorMessage.textContent = msg;
+        errorMessage.classList.add('show');
+    }
+
+    function clearError() {
+        errorMessage.textContent = '';
+        errorMessage.classList.remove('show');
+    }
+
+    async function startCamera() {
+        clearError();
+
+        try {
+            statusValue.textContent = 'Starting...';
+            startBtn.disabled = true;
+
+            stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            video.srcObject = stream;
+
+            // Wait until video dimensions are available
+            await new Promise((resolve) => {
+                if (video.videoWidth > 0) return resolve();
+                video.onloadedmetadata = () => resolve();
+            });
+
+            statusValue.textContent = 'Running';
+            startBtn.style.display = 'none';
+            stopBtn.style.display = 'inline-block';
+
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+            async function tick() {
+                if (!stream) return;
+
+                const now = performance.now();
+                if (lastFrameTs) {
+                    const dt = now - lastFrameTs;
+                    const fps = dt > 0 ? Math.round(1000 / dt) : 0;
+                    fpsLabel.textContent = `FPS: ${fps}`;
+                }
+                lastFrameTs = now;
+
+                if (busy) return;
+                busy = true;
+                busySpinner.classList.add('on');
+
+                try {
+                    // Resize while keeping aspect ratio
+                    const vw = video.videoWidth;
+                    const vh = video.videoHeight;
+                    let w = vw, h = vh;
+                    if (w > MAX_WIDTH) {
+                        const scale = MAX_WIDTH / w;
+                        w = MAX_WIDTH;
+                        h = Math.round(h * scale);
+                    }
+
+                    canvas.width = w;
+                    canvas.height = h;
+                    ctx.drawImage(video, 0, 0, w, h);
+
+                    const blob = await new Promise((resolve) => {
+                        canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY / 100);
+                    });
+
+                    if (!blob) throw new Error('Could not encode frame');
+
+                    const formData = new FormData();
+                    formData.append('frame', blob, 'frame.jpg');
+
+                    const res = await fetch('/detect/frame', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!res.ok) {
+                        const t = await res.text().catch(() => '');
+                        throw new Error(`Backend error: ${res.status} ${t}`);
+                    }
+
+                    const total = res.headers.get('X-Total-Detections');
+                    const totalNum = total ? parseInt(total, 10) : 0;
+                    countValue.textContent = String(totalNum);
+                    objectsBadgeWebcam.textContent = `${totalNum} objects`;
+
+                    const annotatedBlob = await res.blob();
+                    const url = URL.createObjectURL(annotatedBlob);
+                    resultImgWebcam.src = url;
+
+                    // Revoke old object URL after next paint
+                    setTimeout(() => URL.revokeObjectURL(url), 2000);
+
+                } catch (err) {
+                    showError(err.message || String(err));
+                    statusValue.textContent = 'Error';
+                } finally {
+                    busy = false;
+                    busySpinner.classList.remove('on');
+                }
+            }
+
+            timer = setInterval(tick, FRAME_INTERVAL_MS);
+
+        } catch (err) {
+            showError(err.message || String(err));
+            statusValue.textContent = 'Error';
+            startBtn.disabled = false;
+            startBtn.style.display = 'inline-block';
+            stopBtn.style.display = 'none';
+        }
+    }
+
+    function stopCamera() {
+        clearError();
+
+        if (timer) {
+            clearInterval(timer);
+            timer = null;
+        }
+
+        if (stream) {
+            stream.getTracks().forEach(t => t.stop());
+            stream = null;
+        }
+
+        statusValue.textContent = 'Stopped';
+        startBtn.disabled = false;
+        startBtn.style.display = 'inline-block';
+        stopBtn.style.display = 'none';
+        fpsLabel.textContent = 'FPS: -';
+    }
+
+    async function showUploadError(msg) {
+        showError(msg);
+        statusValue.textContent = 'Error';
+    }
+
+    function setMode(mode) {
+        currentMode = mode;
+        clearError();
+
+        if (mode === 'webcam') {
+            uploadMode.style.display = 'none';
+            webcamMode.style.display = 'grid';
+            webcamControls.style.display = 'flex';
+            uploadControls.style.display = 'none';
+            webcamModeBtn.className = 'btn-primary';
+            uploadModeBtn.className = 'btn-secondary';
+
+            cameraHint.style.display = 'block';
+            uploadHint.style.display = 'none';
+            fpsLabel.textContent = 'FPS: -';
+
+            // Reset upload-specific UI
+            if (originalImg) originalImg.style.display = '';
+        } else {
+            // Stop camera to reduce CPU if running
+            if (timer || stream) stopCamera();
+
+            webcamMode.style.display = 'none';
+            uploadMode.style.display = 'block';
+            webcamControls.style.display = 'none';
+            uploadControls.style.display = 'block';
+            webcamModeBtn.className = 'btn-secondary';
+            uploadModeBtn.className = 'btn-primary';
+
+            cameraHint.style.display = 'none';
+            uploadHint.style.display = 'block';
+            statusValue.textContent = 'Idle';
+        }
+    }
+
+
+    function showUploadLoading(isLoading) {
+        // Reuse busySpinner if desired, but keep UI simple
+        if (isLoading) {
+            statusValue.textContent = 'Processing...';
+            startBtn.disabled = true;
+            stopBtn.disabled = true;
+            busySpinner.classList.add('on');
+        } else {
+            busySpinner.classList.remove('on');
+            startBtn.disabled = false;
+            stopBtn.disabled = false;
+        }
+    }
+
+    uploadBox.addEventListener('click', () => fileInput.click());
+
+    uploadBox.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadBox.style.borderColor = '#764ba2';
+        uploadBox.style.background = '#e8eaff';
+    });
+
+    uploadBox.addEventListener('dragleave', () => {
+        uploadBox.style.borderColor = '#667eea';
+        uploadBox.style.background = '#f8f9ff';
+    });
+
+    uploadBox.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadBox.style.borderColor = '#667eea';
+        uploadBox.style.background = '#f8f9ff';
+        const files = e.dataTransfer.files;
+        if (files && files.length > 0) {
+            handleUpload(files[0]);
+        }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+            handleUpload(e.target.files[0]);
+        }
+    });
+
+    async function handleUpload(file) {
+        clearError();
+
+        if (!file.type || !file.type.startsWith('image/')) {
+            showUploadError('Please select an image file');
+            return;
+        }
+
+        if (file.size > 50 * 1024 * 1024) {
+            showUploadError('File size must be less than 50MB');
+            return;
+        }
+
+        showUploadLoading(true);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            originalImg.src = URL.createObjectURL(file);
+
+            const response = await fetch('/detect/', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                const t = await response.text().catch(() => '');
+                throw new Error(`Backend error: ${response.status} ${t}`);
+            }
+
+            const data = await response.json();
+
+            resultImgUpload.src = data.result_image;
+
+            const totalNum = data.total_detections ?? 0;
+            countValue.textContent = String(totalNum);
+            objectsBadgeUpload.textContent = `${totalNum} objects`;
+            statusValue.textContent = 'Complete';
+
+        } catch (err) {
+            showUploadError(err.message || String(err));
+        } finally {
+            showUploadLoading(false);
+        }
+    }
+
+    webcamModeBtn.addEventListener('click', () => setMode('webcam'));
+    uploadModeBtn.addEventListener('click', () => setMode('upload'));
+
+    startBtn.addEventListener('click', startCamera);
+    stopBtn.addEventListener('click', stopCamera);
+
+    // Offline demo: run detection on bundled sample images (no camera/upload needed)
+    async function runSample(name) {
+        clearError();
+        showUploadLoading(true);
+        try {
+            originalImg.src = `/demo/samples/${encodeURIComponent(name)}`;
+            const response = await fetch(`/demo/detect/${encodeURIComponent(name)}`, { method: 'POST' });
+            if (!response.ok) throw new Error(`Backend error: ${response.status}`);
+            const data = await response.json();
+            resultImgUpload.src = data.result_image;
+            const totalNum = data.total_detections ?? 0;
+            countValue.textContent = String(totalNum);
+            objectsBadgeUpload.textContent = `${totalNum} objects`;
+            statusValue.textContent = 'Complete';
+        } catch (err) {
+            showUploadError(err.message || String(err));
+        } finally {
+            showUploadLoading(false);
+        }
+    }
+
+    fetch('/demo/samples').then(r => r.json()).then(({ samples }) => {
+        const box = document.getElementById('demoSamples');
+        for (const name of samples) {
+            const b = document.createElement('button');
+            b.className = 'btn-secondary';
+            b.textContent = name.replace(/\.[^.]+$/, '');
+            b.addEventListener('click', () => runSample(name));
+            box.appendChild(b);
+        }
+    }).catch(() => {});
+
+    // Initial mode (?mode=demo opens the upload/demo view, e.g. ?mode=demo&sample=street.jpg)
+    const params = new URLSearchParams(location.search);
+    if (params.get('mode') === 'demo') {
+        setMode('upload');
+        if (params.get('sample')) runSample(params.get('sample'));
+    } else {
+        setMode('webcam');
+    }
+</script>
+</body>
+</html>
+
+
