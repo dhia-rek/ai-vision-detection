@@ -19,7 +19,7 @@ trained on mirrored copies and averages its prediction over the hand and its mir
 
 import numpy as np
 
-FEATURE_VERSION = 2
+FEATURE_VERSION = 3
 N_FEATURES = 287
 _PAIRS = np.triu_indices(21, 1)
 TIPS = (4, 8, 12, 16, 20)
@@ -49,8 +49,8 @@ def landmark_features_batch(points: np.ndarray, aspect: np.ndarray | float = 1.0
     ang = np.arctan2(p[:, 9, 0], -p[:, 9, 1])
     c, s = np.cos(ang), np.sin(ang)
     x, y = p[:, :, 0].copy(), p[:, :, 1].copy()
-    p[:, :, 0] = c[:, None] * x - s[:, None] * y
-    p[:, :, 1] = s[:, None] * x + c[:, None] * y
+    p[:, :, 0] = c[:, None] * x + s[:, None] * y
+    p[:, :, 1] = -s[:, None] * x + c[:, None] * y
     tips = p[:, TIPS]
     tt = [np.linalg.norm(tips[:, i] - tips[:, j], axis=1) for i in range(5) for j in range(i + 1, 5)]
     tw = [np.linalg.norm(tips[:, i], axis=1) for i in range(5)]

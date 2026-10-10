@@ -35,12 +35,12 @@ short_description: YOLO11 object detection on images and webcam (FastAPI)
 
 ```bash
 git remote add space https://huggingface.co/spaces/<user>/ai-vision-detection
-git push space enhance/showcase:main
+git push space feat/better-models:main
 ```
 
-The Space build uses only `pyproject.toml`, `uv.lock`, `yolo11n.pt` and `backend/` (see `.dockerignore`);
-`yolov8m.pt` (52 MB) is never copied. Hugging Face rejects files over 10 MB without Git LFS, so push from
-a branch where the large weights are tracked with LFS or removed (see README, "Large files").
+The Docker build installs from `pyproject.toml` / `uv.lock`, copies the backend and downloads
+verified model weights during the build. `.dockerignore` excludes `*.pt` files; no YOLO weights
+need to be committed or pushed with Git LFS. Push the branch containing the model changes.
 
 ## 4. Check
 
