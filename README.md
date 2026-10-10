@@ -1,5 +1,5 @@
 # AI Vision Detection
-Real-time **object detection**, **facial expression recognition** and **ASL fingerspelling / gesture recognition** in the browser: live webcam, video file or image, CPU only, served by FastAPI.
+Real-time **object detection**, **facial expression recognition** and **ASL fingerspelling / gesture recognition** in the browser, from your live camera, CPU only, served by FastAPI.
 
 [![CI](https://github.com/dhia-rek/ai-vision-detection/actions/workflows/ci.yml/badge.svg)](https://github.com/dhia-rek/ai-vision-detection/actions/workflows/ci.yml)
 ![Code: MIT](https://img.shields.io/badge/code-MIT-blue)
@@ -34,26 +34,48 @@ Real-time **object detection**, **facial expression recognition** and **ASL fing
 | **Facial expression** | Finds faces, reads one of 7 expressions per face | YuNet + MobileFaceNet |
 | **Sign language** | Two sub-modes: **Fingerspelling** (ASL letters A-Z, with a word builder) and **Gestures** (7 hand shapes mapped to meanings) | MediaPipe hands + our letter classifier |
 
-Sources: **Webcam**, **Video file**, **Image**. Bundled sample images and sample videos need no camera.
-Deep links: `/?mode=objects|faces|sign&sign_mode=spell|gestures&source=webcam|video|image&sample=<file>`.
+The web UI works from the **live camera only**. The image and video endpoints (`/api/analyze`, `/api/video`, `/demo/*`) stay for scripts, tests and the offline demo, but the page does not expose them.
+Deep links: `/?mode=objects|faces|sign&sign_mode=spell|gestures&theme=light|dark&embed=1`.
 
 This was built as a demo of how a browser can help communicate with non-speaking people. It is **not** a replacement for an interpreter (see [Limitations](#limitations)).
 
 ## Web UI
 
-One viewport, one insight panel. The browser sends frames to `/api/analyze?annotate=false` and draws the result itself: boxes, labels and hand skeletons are painted on a `<canvas>` over the media from the returned JSON, so they stay sharp at any size and glide between frames. Per-class colours come from a fixed palette.
+One viewport, one insight panel, one big **Start camera** button. The browser sends frames to `/api/analyze?annotate=false` and draws the result itself: boxes, labels and hand skeletons are painted on a `<canvas>` over the live video from the returned JSON, so they stay sharp at any size and glide between frames.
 
-- **Modes** (keys `1` `2` `3`): Objects (counts per class as bars), Expressions (all seven scores per face), Sign language (current letter, hold-progress ring, word builder; Letters or Gestures).
-- **Sources:** webcam, video file or image; drop a file anywhere on the page; bundled samples are one click away. `Space` pauses, `O` toggles the overlay, `T` the theme, `?` lists shortcuts.
-- **Status bar:** live FPS with a sparkline, round-trip latency, model name, device.
-- Dark by default, follows `prefers-color-scheme`, with a manual toggle. Responsive down to a phone. Plain HTML, CSS and JS in `backend/static/`, no build step and no external requests. Icons are inline [Lucide](https://lucide.dev) (ISC).
-- Screenshots: `uv run --no-project --with playwright python scripts/ui_shots.py --base http://localhost:8000 --out shots` (all modes, desktop and phone, dark and light; fails on console errors or horizontal overflow).
+- **Camera:** friendly empty state with a permission explainer; pause and resume (`Space`), front and back camera switch on phones (`F`), stop. If the camera is blocked, missing, busy or the page is not HTTPS, a help card explains why and how to enable it in Chrome, Edge, Firefox, Safari (Mac and iPhone) and Chrome on Android, with a *Try again* button. The front camera is shown mirrored; frames are sent unmirrored.
+- **Modes** (keys `1` `2` `3`): *Objects* (counts per class as animated bars, a confidence slider that hides detections below 35 % by default, class filter chips), *Expressions* (all seven scores per face), *Sign language* (current letter, hold-progress ring, word builder, Letters or Gestures).
+- **Sign language extras:** a reference chart of the ASL manual alphabet (public-domain illustrations, see [`backend/static/asl/README.md`](backend/static/asl/README.md)) and a **Try: B** challenge: it shows the hand shape, you copy it, hold it, and it checks your sign with a success animation and a streak.
+- **Overlay:** smart label placement (labels avoid each other and the frame edge, falling back to short badges in crowded scenes). `O` toggles detections, **Snapshot** (`S`) downloads the annotated frame as a PNG, drawn client-side.
+- **Layout:** the viewport takes the camera's aspect ratio (portrait on a phone, no black bars); the status bar shows FPS with a sparkline, latency, model and device only while the camera runs.
+- **Look:** matches [dhiarekik.me](https://dhiarekik.me): light by default with a dark option (`T`), Lexend / Figtree / JetBrains Mono self-hosted in [`backend/static/fonts`](backend/static/fonts) (SIL OFL 1.1). Plain HTML, CSS and ES modules in `backend/static/`, no build step, no external requests. Icons are inline [Lucide](https://lucide.dev) (ISC).
+- **Adding a mode** (for example *Record*): see [`backend/static/js/README.md`](backend/static/js/README.md). It is a registry call plus one panel; the shell does the rest.
+
+### Embed it
+
+`?embed=1` hides the header and footer chrome and fits the frame. The iframe needs permission for the camera:
+
+```html
+<iframe src="https://YOUR-HOST/?embed=1&mode=sign&theme=light"
+        title="AI Vision Detection" allow="camera" loading="lazy"
+        style="width:100%;height:560px;border:0;border-radius:16px"></iframe>
+```
+
+`allow="camera"` is required; without it the browser blocks the camera and the page offers an *Open the full version* link. The page must be served over HTTPS (or `localhost`).
+
+### Screenshots
+
+```bash
+uv run --no-project --with playwright python scripts/ui_shots.py --base http://localhost:8000 --out shots
+```
+
+Uses Chromium's fake camera fed from the bundled samples (`--use-file-for-fake-video-capture`), so no webcam is needed. Every mode, desktop and phone, light and dark, plus the empty, blocked and embed states; it fails on console errors, horizontal overflow or basic accessibility problems.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    UI[Browser<br/>webcam / video / image] -->|JPEG frames over HTTP| API[FastAPI<br/>app/main.py]
+    UI[Browser<br/>live camera] -->|JPEG frames over HTTP| API[FastAPI<br/>app/main.py]
     API --> R{mode router}
     R -->|objects| Y[YOLOv8n]
     R -->|faces| F[YuNet detector] --> AL[5-point align 112x112] --> M[MobileFaceNet expression]
@@ -149,7 +171,7 @@ Measured on this project's 6-vCPU VPS, CPU only, 640x480 JPEG frames posted one 
 | Sign: gestures | 37 ms | 43 ms | **23 fps** |
 | Sign: fingerspelling | 37 ms | 43 ms | **23 fps** |
 
-In the real browser UI (headless Chromium, video source, same machine) the full loop (canvas grab,
+In the real browser UI (headless Chromium, fake camera, same machine) the full loop (canvas grab,
 JPEG encode, upload, annotated JPEG back) ran at **8-12.6 fps**. Over a real network expect less;
 the UI sends one frame at a time and never queues. Numbers vary with CPU load: with other heavy
 jobs on the same VPS, YOLO dropped below 1 fps.
