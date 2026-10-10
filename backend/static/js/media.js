@@ -2,7 +2,7 @@
 import { $, sleep } from './util.js';
 import { state, emit, on } from './store.js';
 import { activeMode } from './modes.js';
-import { analyzeFrame, hideModelProgress } from './web-inference.js';
+import { analyzeFrame, frameConcurrency, hideModelProgress } from './web-inference.js';
 import { updateTracks, clearTracks, requestDraw } from './overlay.js';
 import { toast } from './toast.js';
 import { resetStats, recordFrame, recordLatency } from './stats.js';
@@ -12,7 +12,9 @@ import { resetSpell } from './sign.js';
 const video = $('video'), viewport = $('viewport'), grab = $('grab');
 const ctx = grab.getContext('2d');
 let stream = null, camEpoch = 0, generation = 0, feedEpoch = 0;
-let inflight = false, loopRunning = false, lastSize = { w: 4, h: 3 };
+let loopRunning = false, lastSize = { w: 4, h: 3 };
+const active = new Set();            // frames being analysed (more than one with pooled CPU inference)
+let submitted = 0, applied = 0, lastFrameTime = -1;
 
 function setCamera(status) {
   state.camera = status;
@@ -34,7 +36,8 @@ export function mediaShown() { return !!stream && video.videoWidth > 0; }
 /** Fence a model result that belongs to an old mode or camera stream. */
 function invalidate() {
   feedEpoch++;
-  inflight = false;
+  active.clear();
+  lastFrameTime = -1;
   hideModelProgress();
 }
 export function resetFeed() {
@@ -61,15 +64,15 @@ export function applyResult(data) {
   return dets;
 }
 function sourceReady() { return mediaShown() && !video.paused && !document.hidden && state.camera === 'live'; }
-async function sendFrame(gen) {
-  if (inflight || !sourceReady()) return;
-  inflight = true;
-  const epoch = feedEpoch;
+/** Analyse one frame. Results of a pipelined frame that finishes after a newer one are dropped. */
+async function sendFrame(gen, epoch) {
+  const id = ++submitted;
   try {
     const t0 = performance.now();
     const data = await analyzeFrame(state.mode, video, state.sign);
     const t1 = performance.now();
-    if (epoch !== feedEpoch || gen !== generation) return;
+    if (epoch !== feedEpoch || gen !== generation || id < applied) return;
+    applied = id;
     applyResult(data);
     recordFrame(t1, t1 - t0, data);
     $('errorBox').classList.add('hidden');
@@ -79,8 +82,6 @@ async function sendFrame(gen) {
     $('errorBox').classList.remove('hidden');
     recordLatency(0, {});
     await sleep(700);
-  } finally {
-    if (epoch === feedEpoch) inflight = false;
   }
 }
 async function frameLoop(gen) {
@@ -88,8 +89,14 @@ async function frameLoop(gen) {
   loopRunning = true;
   try {
     while (gen === generation && state.camera === 'live') {
-      if (!sourceReady() || inflight) { await sleep(100); continue; }
-      await sendFrame(gen);
+      if (!sourceReady()) { await sleep(100); continue; }
+      if (active.size >= frameConcurrency(state.mode)) { await Promise.race(active); continue; }
+      if (video.currentTime === lastFrameTime) { await sleep(8); continue; }   // the camera has not produced a new frame yet
+      lastFrameTime = video.currentTime;
+      const epoch = feedEpoch;
+      const job = sendFrame(gen, epoch).finally(() => { if (epoch === feedEpoch) active.delete(job); });
+      active.add(job);
+      await sleep(0);   // engines that finish within microtasks (hands) must still let the page paint
     }
   } finally {
     loopRunning = false;

@@ -44,3 +44,21 @@ def avi_bytes(tmp_path) -> bytes:
     data = path.read_bytes()
     assert data
     return data
+
+
+@pytest.fixture(scope="session")
+def static_site(tmp_path_factory):
+    """Base URL of the built static site (``scripts/build_pages_artifact.py`` layout), served locally."""
+    from web_support import build_and_serve
+
+    server, url = build_and_serve(tmp_path_factory.mktemp("pages") / "vision")
+    yield url
+    server.shutdown()
+
+
+@pytest.fixture(scope="session")
+def playwright_session():
+    """A started Playwright driver shared by browser tests."""
+    sync_api = pytest.importorskip("playwright.sync_api")
+    with sync_api.sync_playwright() as playwright:
+        yield playwright

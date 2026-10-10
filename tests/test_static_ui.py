@@ -213,7 +213,8 @@ def test_static_content_rules():
     ]
     # MediaPipe Tasks Vision is pinned; template-literal URLs carry a runtime version constant.
     external_urls = [
-        url for url in external_urls
+        url
+        for url in external_urls
         if "cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TASKS_VISION_VERSION}" not in url
     ]
     assert set(external_urls) <= ALLOWED_URLS
@@ -311,10 +312,9 @@ def test_analyze_with_default_annotation_keeps_result_image(client, jpeg):
 
 def test_javascript_uses_client_side_overlay_and_large_palette():
     js = "\n".join(path.read_text() for path in javascript_files())
-    assert "annotate=false" in js
+    assert "/api/" not in js and "annotate=false" not in js  # the static app never calls the Python API
     assert "result_image" not in js
     assert "X-Detections" not in js
     palette = re.search(r"\bPALETTE\s*=\s*\[(.*?)\]", js, flags=re.DOTALL)
     assert palette
     assert len(re.findall(r"#[0-9a-fA-F]{6}", palette.group(1))) >= 8
-
