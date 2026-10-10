@@ -43,7 +43,7 @@ explicit = true
 [tool.pytest.ini_options]
 pythonpath = ["backend"]
 testpaths = ["tests"]
-markers = ["slow: runs the real YOLOv8 model (needs weights)"]
+markers = ["slow: runs real models (downloads them on first run)"]
 
 [tool.ruff]
 line-length = 110
