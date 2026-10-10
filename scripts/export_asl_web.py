@@ -36,14 +36,22 @@ def export(model_path: Path, output_path: Path) -> dict:
         mean, std = arrays["mean"], arrays["std"]
         if mean.shape != (N_FEATURES,) or std.shape != (N_FEATURES,):
             raise ValueError("Invalid feature-normalisation dimensions")
+        if not np.isfinite(mean).all() or not np.isfinite(std).all() or (std <= 0).any():
+            raise ValueError("Feature normalisation must be finite with positive std")
         classes = [str(c) for c in arrays["classes"]]
+        if classes != list("ABCDEFGHIJKLMNOPQRSTUVWXYZ"):
+            raise ValueError("Expected classes A-Z in output order")
         layers = []
+        seen: set[str] = set()
         width = N_FEATURES
         i = 1
         while f"W{i}" in arrays:
             weights, bias = arrays[f"W{i}"], arrays[f"b{i}"]
             if weights.ndim != 2 or weights.shape[0] != width or bias.shape != (weights.shape[1],):
                 raise ValueError(f"Invalid dimensions for layer {i}")
+            if not np.isfinite(weights).all() or not np.isfinite(bias).all():
+                raise ValueError(f"Non-finite values in layer {i}")
+            seen.update((f"W{i}", f"b{i}"))
             layers.append(
                 {
                     "input_size": width,
@@ -55,6 +63,8 @@ def export(model_path: Path, output_path: Path) -> dict:
             )
             width = int(weights.shape[1])
             i += 1
+        if {name for name in arrays.files if name.startswith(("W", "b"))} != seen:
+            raise ValueError("Non-contiguous or unpaired model layers")
         if not layers or width != len(classes):
             raise ValueError("Output layer does not match classes")
         document = {

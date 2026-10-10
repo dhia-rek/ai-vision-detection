@@ -45,6 +45,7 @@ from .sign import SIGN_MODES
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 STATIC_DIR = BACKEND_DIR / "static"
 SAMPLES_DIR = BACKEND_DIR / "samples"
+ASL_WEB_MODEL = BACKEND_DIR / "app/models/asl_letters_web.json"
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 VIDEO_SUFFIXES = {".mp4", ".webm", ".mov"}
 
@@ -353,6 +354,15 @@ def create_app(detector: Detector | None = None) -> FastAPI:
     def health() -> dict:
         """Liveness probe."""
         return {"status": "ok"}
+
+    @app.get("/api/models/asl-letters-web", include_in_schema=False)
+    def asl_web_model() -> FileResponse:
+        """Serve the versioned ASL MLP export for opt-in browser inference."""
+        return FileResponse(
+            ASL_WEB_MODEL,
+            media_type="application/json",
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
 
     @app.get("/api/modes")
     def modes() -> dict:
