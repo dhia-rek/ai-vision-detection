@@ -66,6 +66,7 @@ MODELS: dict[str, ModelSpec] = {
 }
 
 _lock = threading.Lock()
+_verified: set[str] = set()
 
 
 def model_dir() -> Path:
@@ -85,8 +86,15 @@ def ensure_model(name: str) -> Path:
     spec = MODELS[name]
     path = model_dir() / name
     with _lock:
-        if path.exists():
+        if name in _verified:
             return path
+        if path.exists():
+            # Re-check cached files once per process: catches truncated or tampered models.
+            if _sha256(path) == spec.sha256:
+                _verified.add(name)
+                return path
+            print(f"Cached {name} failed its checksum; downloading again.", flush=True)
+            path.unlink()
         path.parent.mkdir(parents=True, exist_ok=True)
         print(f"Downloading {name} ({spec.size_mb} MB, {spec.license}) ...", flush=True)
         fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".part")
@@ -97,9 +105,11 @@ def ensure_model(name: str) -> Path:
             digest = _sha256(tmp_path)
             if digest != spec.sha256:
                 raise RuntimeError(f"Checksum mismatch for {name}: {digest}")
+            # Atomic on POSIX, so concurrent processes never see a partial file.
             tmp_path.replace(path)
         finally:
             tmp_path.unlink(missing_ok=True)
+        _verified.add(name)
     return path
 
 
