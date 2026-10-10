@@ -10,7 +10,7 @@ Format `dhia-asl-mlp`, `format_version: 1`:
 - `feature_version`: must equal `backend/app/sign_features.py`'s `FEATURE_VERSION`
   (currently 3). A browser implementation must port that feature function, including
   image aspect correction and its mirror-averaged prediction; the old 70-feature
-  browser function is **not** compatible with this export.
+  70-feature representation is **not** compatible with this export.
 - `input_size`: 287; `classes`: A–Z in output-column order.
 - `mean` and `std`: arrays of `input_size` floats. Start with
   `x[i] = (features[i] - mean[i]) / std[i]`.
@@ -25,5 +25,6 @@ Format `dhia-asl-mlp`, `format_version: 1`:
   Python model. Float values are rendered to eight significant digits; the parity
   test checks that this does not change outputs materially.
 
-The browser module in the UI branch must fetch or copy this artifact to a served URL;
-`backend/app/models/` is a model-source directory, not itself a static URL.
+The API serves the committed export at `GET /api/models/asl-letters-web`. A browser
+implementation can fetch that URL; the separate UI branch still needs to port the
+v3 feature transform and inference before this becomes live browser-side detection.

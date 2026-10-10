@@ -228,6 +228,7 @@ CLI demo: `uv run python -m app.demo --mode objects|faces|sign` (stub mode: `AVD
 | GET | `/` | Web UI |
 | GET | `/health` | Liveness check |
 | GET | `/api/modes` | Modes and the model registry (size, licence, source) |
+| GET | `/api/models/asl-letters-web` | Versioned browser JSON export of the ASL MLP; the current UI still uses backend inference |
 | POST | `/api/analyze?mode=objects\|faces\|sign&sign_mode=spell\|gestures&annotate=true\|false` | Multipart `file`: image in, JSON out: `detections` (class, confidence, bbox in pixels of the analysed image; `points` for hands; `top3`, `scores` (all 7 expressions), `handedness`, `gesture` where relevant), `image_size`, `model_used`, `device`, `inference_ms`, and `result_image` (annotated JPEG data URL) unless `annotate=false`. The web UI uses `annotate=false` and draws the boxes itself |
 | POST | `/api/frame` | Multipart `frame` (+ `mode`, `sign_mode`, `quality` 10-95): annotated JPEG; headers `X-Detections` (top 25 by confidence; `X-Detections-Truncated`), `X-Total-Detections`, `X-Inference-Ms` |
 | POST | `/api/video?mode=&sign_mode=&fps=5&max_seconds=60` | Multipart `file` (video; `fps` <= 10, `max_seconds` <= 120, at most 600 frames analysed): per-frame detections (class, confidence, bbox), `label_counts`, `avg_inference_ms`, and `text` in fingerspelling mode |
@@ -260,6 +261,7 @@ Errors: `400` not an image / video or undecodable, `413` too large, `404` unknow
 | MobileFaceNet expression | 4.6 MB | Apache-2.0 | OpenCV Zoo, trained on RAF-DB (faces). RAF-DB is a research dataset with its own non-commercial terms; the weights are Apache-2.0 |
 | `gesture_recognizer.task` | 8.0 MB | Apache-2.0 | Google MediaPipe: hand landmarks + 7 canned gestures |
 | `asl_letters.npz` | 412 KB | MIT (ours) | 287-feature NumPy MLP, trained from landmark data under MIT and CC BY 4.0; sources and citations in [docs/asl-datasets.md](docs/asl-datasets.md) |
+| `asl_letters_web.json` | 1.37 MB (548 KB gzip) | MIT (ours) | Browser export of the same MLP, served at `/api/models/asl-letters-web`; format in [scripts/README.md](scripts/README.md) |
 
 ASL evaluation uses the Roboflow 100 `sign-language-sokdr` collection (CC BY 4.0; EitanG98 mirror) and Cabana 2025 (CC BY 4.0); details and citations are in [docs/asl-datasets.md](docs/asl-datasets.md). Test photos in `tests/fixtures` and samples in `backend/samples` are openly licensed; see `tests/fixtures/*/README.md` and [backend/samples/CREDITS.md](backend/samples/CREDITS.md).
 
@@ -276,7 +278,8 @@ backend/
     asl_classifier.py  Pure-NumPy MLP letter classifier
     zoo.py             Model registry: URLs, SHA-256, download + cache
     demo.py            Offline demo CLI (--mode objects|faces|sign)
-    models/asl_letters.npz   The only committed model (412 KB)
+    models/asl_letters.npz   Committed NumPy classifier (412 KB)
+    models/asl_letters_web.json   Browser JSON export of the same classifier
   samples/             Openly licensed images + 2 slideshow videos + CREDITS.md
   static/               Web UI: index.html (markup + inline SVG icons), app.css, app.js
 scripts/train_asl.py   Train + export the ASL letter classifier
