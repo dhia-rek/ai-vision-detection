@@ -1,8 +1,9 @@
-"""Train, compare and evaluate the ASL letter classifier on signer-independent data.
+"""Train, compare and evaluate the ASL letter classifier on a held-out collection.
 
 Data comes from ``scripts/asl_extract.py`` (landmark ``.npz`` files, one per source). The
 recipe is chosen by **leave-one-source-out** accuracy on the training sources; the final
 numbers are reported on **test sources that are never used for training or selection**.
+Signer IDs are unavailable, so person-level independence is not verified.
 
 Sub-commands::
 

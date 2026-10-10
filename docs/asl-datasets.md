@@ -28,12 +28,14 @@ attribution is satisfied by this page, the README and the credits.
 * **Training sources:** `asl_now`, `kp`, `cab_train` (and any `rec_*.npz` made with the Record mode).
 * **Model selection:** leave-one-source-out (train on two sources, test on the third), averaged over
   the three folds. The test sources are never touched during selection.
-* **Final test:** `eitan` is a different collection (different people, camera, backgrounds) that is
-  never used for training or selection. It is the signer-independent number. `cab_test` is reported
+* **Final test:** `eitan` is a different collection (different camera and backgrounds) that is
+  never used for v3 training or its current leave-one-source-out selection. An earlier project
+  iteration did use it to compare recipes, so the project has historical test exposure. It is a
+  collection-held-out, not wholly blind number. `cab_test` is reported
   too, but it comes from the same collection as `cab_train`, so signers may overlap: it is *not*
   signer-independent.
-* **Caveat:** none of these datasets publishes signer IDs. "Signer-independent" therefore means
-  "held-out collection, presumably different people", not a verified per-person split. Frames of one
+* **Caveat:** none of these datasets publishes signer IDs. Person-level signer independence cannot be
+  verified, even though the test collection is disjoint from training. Frames of one
   video are near-duplicates, so within-source random splits are optimistic; they are not used.
 * The original (v1) model was evaluated on exactly the same hands, so before/after numbers are
   comparable.
@@ -46,7 +48,7 @@ attribution is satisfied by this page, the README and the credits.
 
 | Candidate | Why not |
 | --- | --- |
-| Google "ASL Fingerspelling Recognition" / FSboard (Kaggle, CC BY 4.0, 147 Deaf signers, MediaPipe landmarks) | Licence fits and it is the best signer variety available, but it contains **continuous phrases**, not isolated letters: letter labels would need forced alignment. It is also a large Kaggle download that needs a login. Not used; a good follow-up. |
+| [Google "ASL Fingerspelling Recognition"](https://www.kaggle.com/competitions/asl-fingerspelling/data) (Kaggle, CC BY 4.0, participant IDs, MediaPipe landmarks) | Licence fits, but it contains **continuous phrases**, not isolated letters: letter labels would need forced alignment. The 189 GB competition data requires login and acceptance of competition rules. Not used; a good follow-up. Cite: Chow, Cameron, Georg, Sherwood, Culliton, Sepah, Dane & Starner, *Google - American Sign Language Fingerspelling Recognition*, Kaggle (2023). |
 | Kaggle "ASL Alphabet" (grassknoted) | GPL-2 licence on the data: not compatible with an MIT project without legal review. Also only a few signers. |
 | Sign Language MNIST (CC0) | 28x28 greyscale crops; MediaPipe cannot find hands reliably at that size. |
 | HF mirrors `asthalochan/American_Sign_Language`, `suneetpaul/American_Sign_Language` (Apache-2.0 tag) | A tag on a re-upload with no card or provenance does not establish rights to the images. |

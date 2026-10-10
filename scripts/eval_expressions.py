@@ -128,7 +128,7 @@ def _extract_images(archive: Path, root: Path, limit: int) -> list[tuple[str, st
             for info in sorted(selected, key=lambda x: x.filename):
                 chosen.append((label, _subgroup_from_path(Path(info.filename)), info))
         counts = {label: sum(map(len, groups.values())) for label, groups in entries.items()}
-        if not chosen or any(not entries[label] for label in EXPRESSIONS):
+        if not chosen or any(counts[label] == 0 for label in EXPRESSIONS):
             raise ValueError(f"Archive must have all seven labeled folders; discovered {counts}")
         root.mkdir(parents=True, exist_ok=True)
         result: list[tuple[str, str, Path]] = []
@@ -161,10 +161,11 @@ def _montage(images: list[tuple[str, str, Path]], destination: Path) -> None:
     font = ImageFont.load_default()
     for column, label in enumerate(EXPRESSIONS):
         class_images = [sample for sample in images if sample[0] == label]
-        selected = [
-            sample for subgroup in ("Genuine", "Fake") for sample in class_images if sample[1] == subgroup
-        ][:2]
-        selected = selected[:3]
+        selected = []
+        for subgroup in ("Genuine", "Fake"):
+            representative = next((sample for sample in class_images if sample[1] == subgroup), None)
+            if representative is not None:
+                selected.append(representative)
         if len(selected) < 3:
             selected.extend(sample for sample in class_images if sample not in selected)
         selected = selected[:3]
@@ -199,24 +200,18 @@ def _scores(matrix: list[list[int]], actual: Counter[str]) -> dict[str, Any]:
     }
 
 
-def _evaluate_subset(images: list[tuple[str, str, Path]], detector: ExpressionDetector) -> dict[str, Any]:
-    """Run predictions and compute metrics for an already selected image subset."""
+def _evaluate_subset(images: list[tuple[str, str, Path]], predictions: dict[str, str]) -> dict[str, Any]:
+    """Compute subset metrics from predictions already made for each selected path."""
     matrix = [[0 for _ in PREDICTIONS] for _ in EXPRESSIONS]
     actual: Counter[str] = Counter()
     detected_correct = detected_count = 0
     for label, _, path in images:
-        rgb = np.asarray(_upright_rgb(path))
-        bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-        detections = detector.detect(bgr)
+        prediction = predictions[str(path)]
         actual[label] += 1
-        if not detections:
-            matrix[EXPRESSIONS.index(label)][-1] += 1
-            continue
-        face = max(detections, key=lambda item: max(0.0, item.x2 - item.x1) * max(0.0, item.y2 - item.y1))
-        prediction = face.label if face.label in EXPRESSIONS else "no_face"
         matrix[EXPRESSIONS.index(label)][PREDICTIONS.index(prediction)] += 1
-        detected_count += 1
-        detected_correct += int(prediction == label)
+        if prediction != "no_face":
+            detected_count += 1
+            detected_correct += int(prediction == label)
     result = _scores(matrix, actual)
     result.update(
         {
@@ -233,12 +228,22 @@ def _evaluate_subset(images: list[tuple[str, str, Path]], detector: ExpressionDe
 def evaluate(images: list[tuple[str, str, Path]], model_name: str) -> dict[str, Any]:
     """Run the project's detector and report all-image, Genuine, and subgroup scores."""
     detector = ExpressionDetector()
-    overall = _evaluate_subset(images, detector)
-    genuine = _evaluate_subset([sample for sample in images if sample[1] == "Genuine"], detector)
-    subgroup: dict[str, Any] = {}
+    predictions: dict[str, str] = {}
+    for _, _, path in images:
+        rgb = np.asarray(_upright_rgb(path))
+        bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+        detections = detector.detect(bgr)
+        if not detections:
+            predictions[str(path)] = "no_face"
+            continue
+        face = max(detections, key=lambda item: max(0.0, item.x2 - item.x1) * max(0.0, item.y2 - item.y1))
+        predictions[str(path)] = face.label if face.label in EXPRESSIONS else "no_face"
+    overall = _evaluate_subset(images, predictions)
+    genuine = _evaluate_subset([sample for sample in images if sample[1] == "Genuine"], predictions)
+    subgroup = {}
     for name in ("Genuine", "Fake", "Other"):
         selected = [sample for sample in images if sample[1] == name]
-        subgroup[name] = _evaluate_subset(selected, detector) if selected else {"count": 0}
+        subgroup[name] = _evaluate_subset(selected, predictions) if selected else {"count": 0}
     overall.update(
         {
             "model": model_name,
