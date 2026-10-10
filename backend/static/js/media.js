@@ -134,6 +134,13 @@ function releaseStream() {
   stream = null;
   video.srcObject = null;
 }
+function freezeFrame() {
+  if (!video.videoWidth || !video.videoHeight) return;
+  grab.width = video.videoWidth; grab.height = video.videoHeight;
+  ctx.drawImage(video, 0, 0);
+  video.style.backgroundImage = `url("${grab.toDataURL('image/jpeg', 0.75)}")`;
+  video.style.backgroundSize = 'cover';
+}
 /** Start the camera. `keepFrame` (used when flipping) leaves the last frame on screen while the new stream opens. */
 export async function startCamera({ keepFrame = false } = {}) {
   if (!keepFrame && ['starting', 'live', 'paused'].includes(state.camera)) return;
@@ -141,7 +148,7 @@ export async function startCamera({ keepFrame = false } = {}) {
   stopLoop();
   $('errorBox').classList.add('hidden');
   setCamera('starting');
-  if (!keepFrame) setMediaShown(false);
+  if (!keepFrame) { video.style.backgroundImage = ''; setMediaShown(false); }
   try {
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error('Camera access requires HTTPS or localhost.'), { name: 'InsecureError' });
     const next = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: state.facing }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
@@ -152,7 +159,12 @@ export async function startCamera({ keepFrame = false } = {}) {
     state.mirror = state.facing === 'user';
     document.body.dataset.mirror = String(state.mirror);
     await video.play();
-    if (mine !== camEpoch) { releaseStream(); return; }
+    if (mine !== camEpoch) {
+      if (stream === next) releaseStream();
+      else next.getTracks().forEach((track) => track.stop());
+      return;
+    }
+    video.style.backgroundImage = '';
     const meta = stream.getVideoTracks()[0];
     meta?.addEventListener('ended', () => {
       if (mine !== camEpoch) return;
@@ -165,6 +177,7 @@ export async function startCamera({ keepFrame = false } = {}) {
   } catch (err) {
     if (mine !== camEpoch) return;
     releaseStream();
+    video.style.backgroundImage = '';
     const status = classify(err);
     document.body.dataset.cameraMessage = status === 'error' ? (err.message || '') : '';   // read by main.js when it renders the help card
     setMediaShown(false);
@@ -174,6 +187,7 @@ export async function startCamera({ keepFrame = false } = {}) {
 export function stopCamera() {
   camEpoch++;
   stopLoop(); releaseStream(); resetFeed();
+  video.style.backgroundImage = '';
   setCamera('off'); setMediaShown(false);
   $('flipBtn').classList.add('hidden');
   toast('Camera stopped.', { kind: 'info' });
@@ -190,7 +204,7 @@ export async function flipCamera() {
   if (!stream || !['live', 'paused'].includes(state.camera)) return;
   const previous = { facing: state.facing, mirror: state.mirror, paused: state.camera === 'paused' };
   state.facing = state.facing === 'user' ? 'environment' : 'user';
-  state.mirror = state.facing === 'user';
+  freezeFrame();
   stopLoop(); releaseStream();
   await startCamera({ keepFrame: true });
   if (state.camera !== 'live') {

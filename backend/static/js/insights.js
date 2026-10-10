@@ -101,6 +101,5 @@ function resetObjects() { lastDets = []; $('objBars').replaceChildren(); $('clas
 function onObjects(dets) { lastDets = dets; renderObjects(dets); announce(dets); }
 function onFaces(dets) { lastDets = dets; renderFaces(dets); announce(dets); }
 on('filter', render);
-on('result', ({ dets }) => { if (state.mode === 'objects') onObjects(dets); else if (state.mode === 'faces') onFaces(dets); });
 registerMode({ id: 'objects', order: 1, panel: 'insightObjects', title: 'Objects', sub: '80 everyday object classes', empty: 'Finds and labels everyday objects with a box and a confidence score.', onResult: onObjects, onReset: resetObjects });
 registerMode({ id: 'faces', order: 2, panel: 'insightFaces', title: 'Expressions', sub: 'Seven expressions, scored per face', empty: 'Reads one of seven expressions per face, with a score for each.', onResult: onFaces, onReset() { lastDets = []; $('faceList').replaceChildren(); $('faceNone').textContent = 'No face in view.'; $('faceNone').classList.remove('hidden'); resetAnnounce(); } });
