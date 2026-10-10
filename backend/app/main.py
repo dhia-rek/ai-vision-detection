@@ -36,6 +36,7 @@ from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
+from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
 from .detector import Detector, StubDetector, YoloDetector, annotate, decode_image, encode_jpeg
@@ -336,6 +337,9 @@ def create_app(detector: Detector | None = None) -> FastAPI:
         if builder is not None:
             result["text"] = builder.text.strip()
         return result
+
+    # CSS and JS of the web UI (index.html references /static/app.css and /static/app.js).
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
     @app.get("/", include_in_schema=False)
     def root() -> FileResponse:

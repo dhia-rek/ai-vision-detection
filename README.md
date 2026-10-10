@@ -152,7 +152,7 @@ backend/app/
   asl_classifier.py Pure-numpy ASL letter classifier (loads models/asl_letters.npz)
   zoo.py            Model registry: checksummed downloads and the local cache
   demo.py           CLI that runs a mode over the bundled samples
-backend/static/     Single-page web UI (vanilla JS)
+backend/static/     Web UI: index.html, app.css, app.js (vanilla JS, no build step, canvas overlay)
 scripts/train_asl.py  Trains the ASL letter classifier
 tests/              pytest suite (stub detector by default; `slow` marker runs real models)
 ```
@@ -207,7 +207,7 @@ CLI demo: `uv run python -m app.demo --mode objects|faces|sign` (stub mode: `AVD
 | GET | `/` | Web UI |
 | GET | `/health` | Liveness check |
 | GET | `/api/modes` | Modes and the model registry (size, licence, source) |
-| POST | `/api/analyze?mode=objects\|faces\|sign&sign_mode=spell\|gestures` | Multipart `file`: image in, JSON out: `result_image` (JPEG data URL), `detections` (class, confidence, bbox; `points` for hands; `top3`, `handedness`, `gesture` where relevant), `inference_ms` |
+| POST | `/api/analyze?mode=objects\|faces\|sign&sign_mode=spell\|gestures&annotate=true\|false` | Multipart `file`: image in, JSON out: `detections` (class, confidence, bbox in pixels of the analysed image; `points` for hands; `top3`, `scores` (all 7 expressions), `handedness`, `gesture` where relevant), `image_size`, `model_used`, `device`, `inference_ms`, and `result_image` (annotated JPEG data URL) unless `annotate=false`. The web UI uses `annotate=false` and draws the boxes itself |
 | POST | `/api/frame` | Multipart `frame` (+ `mode`, `sign_mode`, `quality` 10-95): annotated JPEG; headers `X-Detections` (top 25 by confidence; `X-Detections-Truncated`), `X-Total-Detections`, `X-Inference-Ms` |
 | POST | `/api/video?mode=&sign_mode=&fps=5&max_seconds=60` | Multipart `file` (video; `fps` <= 10, `max_seconds` <= 120, at most 600 frames analysed): per-frame detections (class, confidence, bbox), `label_counts`, `avg_inference_ms`, and `text` in fingerspelling mode |
 | POST | `/detect/`, `/detect/frame` | Legacy object-detection endpoints |
@@ -257,7 +257,7 @@ backend/
     demo.py            Offline demo CLI (--mode objects|faces|sign)
     models/asl_letters.npz   The only committed model (<50 KB)
   samples/             Openly licensed images + 2 slideshow videos + CREDITS.md
-  static/index.html    Single-page UI (HTML/JS, speller)
+  static/               Web UI: index.html (markup + inline SVG icons), app.css, app.js
 scripts/train_asl.py   Train + export the ASL letter classifier
 tests/                 pytest suite and photo fixtures
 docs/                  Demo GIF and screenshots
