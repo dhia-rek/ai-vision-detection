@@ -9,10 +9,6 @@ Real-time object detection in the browser: live webcam, image upload, or an offl
 ![Demo](docs/demo/demo.gif)
 *Offline demo mode on the five bundled sample images (YOLOv8n, CPU).*
 
-> **Original author: [Akram Khattabi](https://github.com/AkramKhattabi) ([@AkramKhattabi](https://github.com/AkramKhattabi)).**
-> The project, its idea, the detection UI and the webcam/upload workflow are his: <https://github.com/AkramKhattabi/ai-vision-detection>.
-> This repository is a copy maintained by Dhia ([@dhia-rek](https://github.com/dhia-rek)) with Akram's permission. See [Enhancements in this fork](#enhancements-in-this-fork) for what changed.
-
 ## Overview
 
 A small web app that runs off-the-shelf object detection. The browser UI either captures webcam frames or takes an uploaded image, sends it to a FastAPI backend, and shows the image back with bounding boxes and labels.
@@ -27,8 +23,7 @@ Modes:
 
 ![Demo mode in the web UI](docs/screenshot-demo.jpg)
 
-The original app (Akram) provides the FastAPI backend, the YOLOv8 inference endpoints and the
-single-page UI with live webcam streaming, FPS counter and drag & drop upload.
+The single-page UI streams the webcam with an FPS counter and supports drag & drop upload.
 
 ## Architecture
 
@@ -136,22 +131,18 @@ yolov8n.pt         Pretrained weights (AGPL-3.0, 6.5 MB); yolov8m.pt (52 MB) is 
 pyproject.toml     Dependencies (uv), ruff and pytest config
 ```
 
-## Enhancements in this fork
+## Engineering notes
 
-Changes by Dhia on top of Akram's original app:
-
-- **Tooling**: `uv` + `pyproject.toml` + lockfile, CPU-only PyTorch on Linux.
-- **Refactor**: `detector.py` (`YoloDetector` + `StubDetector`) and an app factory; dead code removed.
-- **Security fixes**:
-  - Upload filenames allowed path traversal and arbitrary file writes; uploads are now decoded in memory and nothing is written to disk.
-  - Upload size and decoded-pixel limits added.
-  - CORS wildcard with credentials removed; CORS is opt-in via `AVD_CORS_ORIGINS`.
-  - Internal errors are no longer echoed to clients.
-  - History endpoint and stored outputs removed for privacy.
-- **Annotation** drawn with OpenCV (no font download).
+- **Tooling**: `uv` + `pyproject.toml` + lockfile, CPU-only PyTorch on Linux, ruff.
+- **Design**: `detector.py` (`YoloDetector` + torch-free `StubDetector`) behind an app factory, so tests run in seconds without weights.
+- **Security & privacy**:
+  - Uploads and webcam frames are decoded in memory; nothing is written to disk and client filenames are never used as paths.
+  - Upload size and decoded-pixel limits (decompression-bomb guard).
+  - CORS is off unless explicitly configured via `AVD_CORS_ORIGINS`.
+  - Internal errors are not echoed to clients.
+- **Annotation** drawn with OpenCV (no font download at runtime).
 - **Offline demo mode** with CC0 samples, sample buttons in the UI and a CLI.
-- **UI fixes**: upload results shown from the inline data URL; webcam controls hidden in upload mode.
-- **Tests and CI**: pytest suite and GitHub Actions.
+- **Tests and CI**: pytest suite and GitHub Actions (lint, tests, real-model smoke test).
 - **Deployment**: Dockerfile and Hugging Face Space preparation (`DEPLOY.md`).
 
 ## Large files
@@ -187,9 +178,9 @@ already falls back to that when the file is missing).
 
 Python 3.11+, FastAPI, Uvicorn, Ultralytics YOLOv8, PyTorch (CPU), OpenCV (headless), NumPy, Pillow, vanilla HTML/JS front-end; uv, pytest, ruff, GitHub Actions, Docker.
 
-## Credits
+## Acknowledgements
 
-- **Original author: Akram Khattabi** ([@AkramKhattabi](https://github.com/AkramKhattabi)), <https://github.com/AkramKhattabi/ai-vision-detection>.
-- Fork maintained by Dhia ([@dhia-rek](https://github.com/dhia-rek)).
 - [Ultralytics YOLOv8](https://github.com/ultralytics/ultralytics) and the [COCO dataset](https://cocodataset.org).
 - Sample images: Wikimedia Commons (CC0).
+
+Author: Dhia ([@dhia-rek](https://github.com/dhia-rek)).
