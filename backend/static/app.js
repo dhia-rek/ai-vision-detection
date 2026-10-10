@@ -66,7 +66,7 @@ let firstResult = false;
 const pct = (v) => `${Math.round((Number(v) || 0) * 100)}%`;
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-function qs() { return `mode=${state.mode}&sign_mode=${state.sign}&annotate=false`; }
+function qs() { return `mode=${state.mode}&sign_mode=${state.sign === 'record' ? 'spell' : state.sign}&annotate=false`; }
 function trackUrl(u) { objectUrls.push(u); return u; }
 function revokeUrls() { objectUrls.forEach((u) => URL.revokeObjectURL(u)); objectUrls = []; }
 function svgUse(name) {
@@ -89,6 +89,81 @@ function hash(s) { let x = 2166136261; for (let i = 0; i < s.length; i++) { x ^=
 function spellActive() { return state.mode === 'sign' && state.sign === 'spell' && state.source !== 'image'; }
 function liveSource() { return state.source === 'webcam' || state.source === 'video'; }
 function labelOf(d) { return String(d.class); }
+
+class LetterSmoother {
+  constructor(alpha = 0.45, switchMargin = 0.12, minConf = 0.5, gapResetS = 0.6) {
+    this.alpha = alpha; this.switchMargin = switchMargin; this.minConf = minConf; this.gapResetS = gapResetS;
+    this.reset();
+  }
+  reset() { this.ema = null; this.current = null; this.lastSeen = null; }
+  feed(scores, t) {
+    if (this.lastSeen !== null && t - this.lastSeen > this.gapResetS) this.reset();
+    if (scores == null) return [null, 0];
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    if (this.ema === null) this.ema = Object.fromEntries([...letters].map((c) => [c, Number(scores[c]) || 0]));
+    else for (const c of letters) this.ema[c] = this.alpha * (Number(scores[c]) || 0) + (1 - this.alpha) * this.ema[c];
+    this.lastSeen = t;
+    const winner = [...letters].reduce((a, c) => this.ema[c] > this.ema[a] ? c : a, 'A');
+    if (this.current === null || this.ema[winner] > this.ema[this.current] + this.switchMargin) this.current = winner;
+    const confidence = this.ema[this.current];
+    return [confidence >= this.minConf ? this.current : null, confidence];
+  }
+}
+if (typeof module !== 'undefined') module.exports = { LetterSmoother };
+const letterSmoother = new LetterSmoother();
+const RECORD_KEY = 'avd.recordings.v1', RECORD_LIMIT = 20000;
+let recordings = [];
+let recording = false;
+let previousRecorded = null, previousRecordAt = 0;
+try {
+  const saved = JSON.parse(localStorage.getItem(RECORD_KEY) || '[]');
+  if (Array.isArray(saved)) recordings = saved.filter((sample) => sample && /^[A-Z]$/.test(sample.letter) && Array.isArray(sample.landmarks));
+} catch (e) { /* unavailable or malformed local storage */ }
+function saveRecordings() {
+  try { localStorage.setItem(RECORD_KEY, JSON.stringify(recordings)); }
+  catch (e) { $('recordStatus').textContent = 'Could not save recordings in this browser storage.'; }
+  renderRecordCounts();
+}
+function renderRecordCounts() {
+  const counts = Object.fromEntries([...('ABCDEFGHIJKLMNOPQRSTUVWXYZ')].map((c) => [c, 0]));
+  recordings.forEach((sample) => { if (counts[sample.letter] !== undefined) counts[sample.letter]++; });
+  $('recordCounts').textContent = `${counts[$('recordLetter').value] || 0} for ${$('recordLetter').value} · ${recordings.length} samples total`;
+}
+function recordDetection(dets, size) {
+  if (!recording) return;
+  const hand = dets.reduce((a, d) => (!a || d.confidence > a.confidence ? d : a), null);
+  const points = hand && hand.landmarks;
+  if (!Array.isArray(points) || points.length !== 21) return;
+  const now = performance.now();
+  if (previousRecorded && now - previousRecordAt < 125) return;
+  if (previousRecorded) {
+    const delta = points.reduce((sum, p, i) => sum + p.reduce((n, v, k) => n + Math.abs(v - previousRecorded[i][k]), 0), 0) / 63;
+    if (delta < 0.002) return;
+  }
+  if (recordings.length >= RECORD_LIMIT) {
+    recording = false;
+    $('recordToggle').setAttribute('aria-pressed', 'false');
+    $('recordToggle').textContent = 'Start recording';
+    $('recordStatus').textContent = 'Recording stopped: the 20,000 sample limit was reached.';
+    return;
+  }
+  recordings.push({ letter: $('recordLetter').value, landmarks: points, handedness: hand.handedness || null, image_size: [size.w, size.h] });
+  previousRecorded = points.map((p) => p.slice()); previousRecordAt = now;
+  saveRecordings();
+  if (recordings.length >= RECORD_LIMIT) {
+    recording = false;
+    $('recordToggle').setAttribute('aria-pressed', 'false');
+    $('recordToggle').textContent = 'Start recording';
+    $('recordStatus').textContent = 'Recording stopped: the 20,000 sample limit was reached.';
+  }
+}
+function setRecording(on) {
+  recording = on;
+  previousRecorded = null; previousRecordAt = 0;
+  $('recordToggle').setAttribute('aria-pressed', String(on));
+  $('recordToggle').textContent = on ? 'Stop recording' : 'Start recording';
+  $('recordStatus').textContent = on ? 'Recording is on.' : 'Recording is off.';
+}
 
 function setStatus(kind, text) {
   el.body.dataset.state = kind;
@@ -399,7 +474,7 @@ function renderFaces(dets) {
 }
 
 function renderSign(dets) {
-  const best = dets.reduce((a, d) => (!a || d.confidence > a.confidence ? d : a), null);
+  const best = dets.find((d) => d._primarySignHand) || dets.reduce((a, d) => (!a || d.confidence > a.confidence ? d : a), null);
   const spell = state.sign === 'spell';
   const main = $('signMain');
   $('signLabel').textContent = spell ? 'Current letter' : 'Current gesture';
@@ -481,6 +556,12 @@ function applyResult(data) {
     dets = dets.slice().sort((a, b) => a.bbox.x1 - b.bbox.x1);
     dets.forEach((d, i) => { d._index = dets.length > 1 ? i + 1 : null; });
   }
+  if (state.mode === 'sign' && state.sign === 'spell' && state.source !== 'image') {
+    const primary = dets.reduce((a, d) => (!a || d.confidence > a.confidence ? d : a), null);
+    const [letter, confidence] = letterSmoother.feed(primary ? primary.scores : null, performance.now() / 1000);
+    if (primary) { primary._primarySignHand = true; primary.class = letter || '–'; primary.confidence = confidence; primary.low_confidence = letter === null; }
+  }
+  if (state.mode === 'sign' && state.sign === 'record') recordDetection(dets, size);
   updateTracks(dets, size);
   renderInsights(dets);
   return dets;
@@ -576,7 +657,7 @@ async function sendFrame(gen) {
     const dets = applyResult(data);
     recordFrame(t1, t1 - t0, data);
     if (spellAtSend && spellActive()) {
-      const best = dets.reduce((a, d) => (!a || d.confidence > a.confidence ? d : a), null);
+      const best = dets.find((d) => d._primarySignHand) || dets.reduce((a, d) => (!a || d.confidence > a.confidence ? d : a), null);
       builder.feed(best ? best.class : null, best ? best.confidence : 0, t1 / 1000);
     }
     clearError();
@@ -892,12 +973,13 @@ function syncUI() {
   if (meta.button) $('chooseLabel').textContent = meta.button;
   const mm = MODE_META[state.mode];
   $('panelTitle').textContent = mm.title;
-  $('panelSub').textContent = state.mode === 'sign' ? (state.sign === 'spell' ? 'ASL fingerspelling, letters A to Z' : 'Seven static hand gestures') : mm.sub;
+  $('panelSub').textContent = state.mode === 'sign' ? (state.sign === 'spell' ? 'ASL fingerspelling, letters A to Z' : state.sign === 'record' ? 'Record hand landmarks for a letter' : 'Seven static hand gestures') : mm.sub;
   $('insightObjects').classList.toggle('hidden', state.mode !== 'objects');
   $('insightFaces').classList.toggle('hidden', state.mode !== 'faces');
   $('insightSign').classList.toggle('hidden', state.mode !== 'sign');
   $('signSwitch').classList.toggle('hidden', state.mode !== 'sign');
   $('speller').classList.toggle('hidden', !spellActive());
+  $('recordPanel').classList.toggle('hidden', !(state.mode === 'sign' && state.sign === 'record'));
   const note = $('signImageNote');
   note.classList.toggle('hidden', !(state.mode === 'sign' && (state.source === 'image' || state.sign === 'gestures')));
   note.textContent = state.sign === 'spell'
@@ -932,6 +1014,7 @@ function setMode(mode, sign) {
   clearTracks();
   lastSummary = ''; pendingSummary = null; clearTimeout(announceTimer);
   builder.clear();
+  letterSmoother.reset();
   firstResult = false;
   renderInsights([]);
   syncUI();
@@ -942,6 +1025,7 @@ function setSource(source) {
   if (source === state.source) return syncUI();
   releaseMedia();
   state.source = source;
+  letterSmoother.reset();
   clearTracks();
   resetStats();
   clearError();
@@ -1011,6 +1095,7 @@ document.addEventListener('keydown', (e) => {
       if (onControl) return;
       e.preventDefault(); togglePause(); break;
     case 'o': case 'O': toggleOverlay(); break;
+    case 'r': case 'R': if (state.mode === 'sign' && state.sign === 'record') setRecording(!recording); break;
     case 't': case 'T': toggleTheme(); break;
     case '?': helpDialog.showModal(); break;
     case 'Backspace':
@@ -1022,12 +1107,24 @@ document.addEventListener('keydown', (e) => {
 
 window.addEventListener('beforeunload', () => { stopCameraTracks(); revokeUrls(); });
 
+// ---------- landmark recorder ----------
+for (const letter of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') $('recordLetter').add(new Option(letter, letter));
+$('recordLetter').addEventListener('change', renderRecordCounts);
+$('recordToggle').addEventListener('click', () => setRecording(!recording));
+$('downloadRecord').addEventListener('click', () => {
+  const payload = { format: 'avd-landmarks', version: 1, created: new Date().toISOString(), note: 'hand landmarks only, no images', samples: recordings };
+  const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+  const a = document.createElement('a'); a.href = url; a.download = 'avd-recordings.json'; a.click(); URL.revokeObjectURL(url);
+});
+$('clearRecord').addEventListener('click', () => { recordings = []; saveRecordings(); $('recordStatus').textContent = 'Stored recordings cleared.'; });
+renderRecordCounts();
+
 // ---------- init ----------
 (async function init() {
   const p = new URLSearchParams(location.search);
   const m = p.get('mode'), s = p.get('sign_mode'), src = p.get('source'), sample = p.get('sample');
   if (GROUPS.includes(m)) state.mode = m;
-  if (['spell', 'gestures'].includes(s)) state.sign = s;
+  if (['spell', 'gestures', 'record'].includes(s)) state.sign = s;
   if (['webcam', 'video', 'image'].includes(src)) state.source = src;
   applyTheme(document.documentElement.dataset.theme, false);
   setStatus('idle');
