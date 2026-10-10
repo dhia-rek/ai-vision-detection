@@ -1,8 +1,8 @@
-/** Live-camera capture, lifecycle and the stale-safe /api/analyze frame loop. */
+/** Live-camera capture, lifecycle and stale-safe on-device inference loop. */
 import { $, sleep } from './util.js';
 import { state, emit, on } from './store.js';
-import { MAX_WIDTH, JPEG_QUALITY, REQUEST_TIMEOUT_MS } from './config.js';
 import { activeMode } from './modes.js';
+import { analyzeFrame, hideModelProgress } from './web-inference.js';
 import { updateTracks, clearTracks, requestDraw } from './overlay.js';
 import { toast } from './toast.js';
 import { resetStats, recordFrame, recordLatency } from './stats.js';
@@ -11,8 +11,8 @@ import { resetSpell } from './sign.js';
 
 const video = $('video'), viewport = $('viewport'), grab = $('grab');
 const ctx = grab.getContext('2d');
-let stream = null, camEpoch = 0, generation = 0, feedEpoch = 0, controller = null;
-let inflight = false, loopRunning = false, firstResult = false, lastSize = { w: 4, h: 3 };
+let stream = null, camEpoch = 0, generation = 0, feedEpoch = 0;
+let inflight = false, loopRunning = false, lastSize = { w: 4, h: 3 };
 
 function setCamera(status) {
   state.camera = status;
@@ -31,16 +31,14 @@ function setMediaShown(shown, w = 0, h = 0) {
 }
 export function mediaShown() { return !!stream && video.videoWidth > 0; }
 
-/** Abort prior work and fence any response that cannot be aborted in time. */
+/** Fence a model result that belongs to an old mode or camera stream. */
 function invalidate() {
   feedEpoch++;
-  if (controller) controller.abort();
-  controller = null;
   inflight = false;
+  hideModelProgress();
 }
 export function resetFeed() {
   invalidate();
-  firstResult = false;
   clearTracks();
   resetAnnounce();
   resetSpell();
@@ -66,38 +64,23 @@ function sourceReady() { return mediaShown() && !video.paused && !document.hidde
 async function sendFrame(gen) {
   if (inflight || !sourceReady()) return;
   inflight = true;
-  const epoch = feedEpoch, ctl = new AbortController();
-  controller = ctl;
-  const timer = setTimeout(() => ctl.abort(), REQUEST_TIMEOUT_MS);
+  const epoch = feedEpoch;
   try {
-    const t0 = performance.now(), vw = video.videoWidth, vh = video.videoHeight;
-    if (!vw || !vh) return;
-    const w = Math.min(vw, MAX_WIDTH), h = Math.round(vh * w / vw);
-    grab.width = w; grab.height = h;
-    ctx.drawImage(video, 0, 0, w, h);
-    const blob = await new Promise((resolve) => grab.toBlob(resolve, 'image/jpeg', JPEG_QUALITY));
-    if (!blob) throw new Error('Could not encode camera frame.');
-    const fd = new FormData(); fd.append('file', blob, 'frame.jpg');
-    const mode = activeMode();
-    const query = mode.query ? mode.query(state) : `mode=${encodeURIComponent(mode.id)}`;
-    const url = `/api/analyze?${query}${query ? '&' : ''}annotate=false`;
-    const res = await fetch(url, { method: 'POST', body: fd, signal: ctl.signal });
-    if (!res.ok) throw new Error(`Backend error: ${res.status} ${(await res.text().catch(() => '')).slice(0, 180)}`);
-    const data = await res.json(), t1 = performance.now();
+    const t0 = performance.now();
+    const data = await analyzeFrame(state.mode, video, state.sign);
+    const t1 = performance.now();
     if (epoch !== feedEpoch || gen !== generation) return;
-    firstResult = true;
-    const dets = applyResult(data);
+    applyResult(data);
     recordFrame(t1, t1 - t0, data);
     $('errorBox').classList.add('hidden');
   } catch (err) {
     if (epoch !== feedEpoch || gen !== generation || state.camera !== 'live') return;   // stale or stopped: say nothing
-    $('errorText').textContent = err.name === 'AbortError' ? 'The server took too long to answer.' : (err.message || String(err));
+    $('errorText').textContent = err.message || String(err);
     $('errorBox').classList.remove('hidden');
     recordLatency(0, {});
     await sleep(700);
   } finally {
-    clearTimeout(timer);
-    if (epoch === feedEpoch) { inflight = false; controller = null; }
+    if (epoch === feedEpoch) inflight = false;
   }
 }
 async function frameLoop(gen) {

@@ -79,7 +79,7 @@ function syncCamera(status) {
   $('camHelp').classList.toggle('hidden', !help);
   if (help) {
     $('camHelp').dataset.kind = status;
-    $('helpTitle').textContent = help[0]; $('helpText').textContent = status === 'error' ? (document.body.dataset.cameraMessage || help[1]) : help[1];
+    $('cameraHelpTitle').textContent = help[0]; $('helpText').textContent = status === 'error' ? (document.body.dataset.cameraMessage || help[1]) : help[1];
     const showSteps = status === 'blocked';
     $('helpSteps').classList.toggle('hidden', !showSteps);
     for (const item of $('helpSteps').querySelectorAll('.howto')) item.open = false;
