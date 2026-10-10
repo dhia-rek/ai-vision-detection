@@ -5,12 +5,14 @@ Environment variables:
   AVD_WEIGHTS        path or Ultralytics model name (default: repo-root yolov8n.pt)
   AVD_CONF           confidence threshold (default 0.25)
   AVD_MAX_UPLOAD_MB  upload size limit in MB (default 10)
+  AVD_MAX_PIXELS     decoded image size limit in megapixels (default 40)
   AVD_CORS_ORIGINS   comma-separated allowed origins (default: none, same-origin only)
 """
 
 from __future__ import annotations
 
 import base64
+import io
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -18,6 +20,7 @@ from pathlib import Path
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
+from PIL import Image
 
 from .detector import (
     Detector,
@@ -62,6 +65,7 @@ def list_samples() -> list[str]:
 def create_app(detector: Detector | None = None) -> FastAPI:
     app = FastAPI(title="AI Vision Detection API", version="1.0.0")
     max_bytes = int(float(os.getenv("AVD_MAX_UPLOAD_MB", "10")) * 1024 * 1024)
+    max_pixels = int(float(os.getenv("AVD_MAX_PIXELS", "40")) * 1_000_000)
 
     origins = [o.strip() for o in os.getenv("AVD_CORS_ORIGINS", "").split(",") if o.strip()]
     if origins:
@@ -80,6 +84,17 @@ def create_app(detector: Detector | None = None) -> FastAPI:
         raw = await upload.read(max_bytes + 1)
         if len(raw) > max_bytes:
             raise HTTPException(status_code=413, detail="Image too large")
+        return decode_checked(raw)
+
+    def decode_checked(raw: bytes):
+        # Read only the header first so a small file can't decode into a huge bitmap.
+        try:
+            with Image.open(io.BytesIO(raw)) as probe:
+                width, height = probe.size
+        except Exception:
+            raise HTTPException(status_code=400, detail="Could not decode image") from None
+        if width * height > max_pixels:
+            raise HTTPException(status_code=413, detail="Image dimensions too large")
         img = decode_image(raw)
         if img is None:
             raise HTTPException(status_code=400, detail="Could not decode image")
@@ -137,7 +152,7 @@ def create_app(detector: Detector | None = None) -> FastAPI:
         """Run detection on a bundled sample: no camera or upload needed."""
         if name not in list_samples():
             raise HTTPException(status_code=404, detail="Unknown sample")
-        return run(decode_image((SAMPLES_DIR / name).read_bytes()))
+        return run(decode_checked((SAMPLES_DIR / name).read_bytes()))
 
     return app
 

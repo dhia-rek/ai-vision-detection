@@ -117,6 +117,7 @@ Environment variables:
 | `AVD_WEIGHTS` | bundled `yolov8n.pt` | Path to YOLO weights |
 | `AVD_CONF` | `0.25` | Confidence threshold |
 | `AVD_MAX_UPLOAD_MB` | `10` | Maximum upload size |
+| `AVD_MAX_PIXELS` | `40` | Maximum decoded image size in megapixels (blocks decompression bombs) |
 | `AVD_CORS_ORIGINS` | *(empty)* | Comma-separated allowed origins; CORS is off unless set |
 
 ## Project Structure
@@ -143,7 +144,7 @@ Changes by Dhia on top of Akram's original app:
 - **Refactor**: `detector.py` (`YoloDetector` + `StubDetector`) and an app factory; dead code removed.
 - **Security fixes**:
   - Upload filenames allowed path traversal and arbitrary file writes; uploads are now decoded in memory and nothing is written to disk.
-  - Upload size limit added.
+  - Upload size and decoded-pixel limits added.
   - CORS wildcard with credentials removed; CORS is opt-in via `AVD_CORS_ORIGINS`.
   - Internal errors are no longer echoed to clients.
   - History endpoint and stored outputs removed for privacy.
