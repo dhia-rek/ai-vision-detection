@@ -1,9 +1,12 @@
 """Real-model tests: check the labels are actually right on the bundled fixtures.
 
-Models download on first run (app.zoo.ensure_model); a network failure skips the test.
+Models download on first run (app.zoo.ensure_model); a failed download skips the test
+locally but fails in CI.
 Each detector is built once per session.
 """
 
+import os
+import urllib.error
 from pathlib import Path
 
 import cv2
@@ -23,8 +26,12 @@ def build_or_skip(key: str):
 
     try:
         return build_detector(key)
-    except (OSError, RuntimeError) as exc:  # URLError/HTTPError are OSErrors
-        pytest.skip(f"could not load {key} model (network?): {exc}")
+    except urllib.error.URLError as exc:
+        # Only a failed download skips, and never in CI: a missing system library
+        # (e.g. libEGL for MediaPipe) or a checksum mismatch must fail loudly.
+        if os.getenv("CI"):
+            raise
+        pytest.skip(f"could not download {key} model: {exc}")
 
 
 @pytest.fixture(scope="session", autouse=True)
