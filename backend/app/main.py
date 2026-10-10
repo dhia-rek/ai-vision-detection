@@ -50,6 +50,8 @@ MODES = {
     "sign": "ASL fingerspelling letters (sign_mode=spell) or common hand gestures (sign_mode=gestures)",
 }
 SAMPLE_GROUPS = ("objects", "faces", "sign", "video")
+MAX_HEADER_DETECTIONS = 25  # keep X-Detections well under common 8 KB header limits
+MAX_VIDEO_FRAMES = 600  # hard cap on analysed frames per /api/video request
 
 
 def mode_key(mode: str, sign_mode: str = "spell") -> str:
@@ -158,7 +160,8 @@ def create_app(detector: Detector | None = None) -> FastAPI:
         t0 = time.perf_counter()
         detections = det.detect(img)
         ms = (time.perf_counter() - t0) * 1000
-        brief = [{"class": d.label, "confidence": round(d.confidence, 3)} for d in detections]
+        ranked = sorted(detections, key=lambda d: d.confidence, reverse=True)[:MAX_HEADER_DETECTIONS]
+        brief = [{"class": d.label, "confidence": round(d.confidence, 3)} for d in ranked]
         return Response(
             content=encode_jpeg(annotate(img, detections), quality=quality),
             media_type="image/jpeg",
@@ -166,6 +169,7 @@ def create_app(detector: Detector | None = None) -> FastAPI:
                 "X-Total-Detections": str(len(detections)),
                 "X-Detections": json.dumps(brief, ensure_ascii=True),
                 "X-Inference-Ms": f"{ms:.1f}",
+                "X-Detections-Truncated": str(len(detections) > MAX_HEADER_DETECTIONS).lower(),
             },
         )
 
@@ -185,7 +189,7 @@ def create_app(detector: Detector | None = None) -> FastAPI:
             frames, counts, total_ms, idx = [], Counter(), 0.0, 0
             while True:
                 ok = cap.grab()
-                if not ok or idx / src_fps > max_seconds:
+                if not ok or idx / src_fps > max_seconds or len(frames) >= MAX_VIDEO_FRAMES:
                     break
                 if idx % step == 0:
                     ok, frame = cap.retrieve()
@@ -201,7 +205,12 @@ def create_app(detector: Detector | None = None) -> FastAPI:
                     if builder is not None:
                         best = max(dets, key=lambda d: d.confidence, default=None)
                         builder.feed(best.label if best else None, best.confidence if best else 0.0, t)
-                    frames.append({"t": round(t, 2), "detections": [d.to_dict() for d in dets]})
+                    # Per-frame output stays small: no hand keypoints, no top-3.
+                    brief = [
+                        {"class": d.label, "confidence": round(d.confidence, 4), "bbox": d.to_dict()["bbox"]}
+                        for d in dets
+                    ]
+                    frames.append({"t": round(t, 2), "detections": brief})
                 idx += 1
         finally:
             cap.release()
@@ -265,8 +274,8 @@ def create_app(detector: Detector | None = None) -> FastAPI:
         file: UploadFile = File(...),
         mode: str = Query("objects"),
         sign_mode: str = Query("spell"),
-        fps: float = Query(5.0, gt=0, le=30),
-        max_seconds: float = Query(60.0, gt=0, le=300),
+        fps: float = Query(5.0, gt=0, le=10),
+        max_seconds: float = Query(60.0, gt=0, le=120),
     ):
         """Video in; per-frame detections at `fps` samples per second out (JSON).
 
@@ -276,13 +285,15 @@ def create_app(detector: Detector | None = None) -> FastAPI:
         key = mode_key(mode, sign_mode)
         if not (file.content_type or "").startswith("video/"):
             raise HTTPException(status_code=400, detail="File must be a video")
-        raw = await file.read(max_video_bytes + 1)
-        if len(raw) > max_video_bytes:
-            raise HTTPException(status_code=413, detail="Video too large")
         with tempfile.NamedTemporaryFile(suffix=".video") as tmp:
-            tmp.write(raw)
+            # Stream to disk in chunks so large uploads never sit in RAM.
+            size = 0
+            while chunk := await file.read(1 << 20):
+                size += len(chunk)
+                if size > max_video_bytes:
+                    raise HTTPException(status_code=413, detail="Video too large")
+                tmp.write(chunk)
             tmp.flush()
-            del raw
             return await run_in_threadpool(analyze_video, tmp.name, key, fps, max_seconds)
 
     # Backwards-compatible object-detection endpoints.
