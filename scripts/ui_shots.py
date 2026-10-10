@@ -219,13 +219,11 @@ def run_shot(
         elif camera:
             page.wait_for_function("() => document.body.dataset.camera === 'live'", timeout=60_000)
             if results_wait:
-                result_checks = {
-                    # The FPS/model counters update even when the current frame has no detections.
-                    # This proves inference completed without requiring a particular prediction.
-                    "objects": "document.querySelector('#modelName')?.textContent !== '–' && document.querySelector('#latency')?.textContent !== '–'",
-                    "faces": "document.querySelector('#modelName')?.textContent !== '–' && document.querySelector('#latency')?.textContent !== '–'",
-                    "sign": "document.querySelector('#modelName')?.textContent !== '–' && document.querySelector('#latency')?.textContent !== '–'",
-                }
+                counters_ready = (
+                    "document.querySelector('#modelName')?.textContent !== '–' && "
+                    "document.querySelector('#latency')?.textContent !== '–'"
+                )
+                result_checks = {"objects": counters_ready, "faces": counters_ready, "sign": counters_ready}
                 page.wait_for_function(
                     f"() => {result_checks[mode]}",
                     timeout=90_000,

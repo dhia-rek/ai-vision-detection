@@ -22,10 +22,13 @@ RUN uv sync --frozen --no-dev --no-install-project && chown -R app /app
 
 COPY --chown=app LICENSE ./
 COPY --chown=app backend/ ./backend/
+COPY --chown=app scripts/export_web_models.py ./scripts/export_web_models.py
 USER app
 
 WORKDIR /app/backend
 # Fetch and checksum-verify all pretrained models (~19 MB) into the image.
 RUN python -m app.zoo
+# The static UI runs inference in the browser; fetch its pinned runtimes (git-ignored) into backend/static/vendor.
+RUN python /app/scripts/export_web_models.py --only vendor
 EXPOSE 7860
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-7860}"]

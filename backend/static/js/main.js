@@ -90,7 +90,7 @@ function syncCamera(status) {
       if (howto) howto.open = true;
       if (window.top !== window.self) { $('helpText').textContent += ' If this page is embedded, the host page must allow the camera (allow="camera").'; $('openFull').classList.remove('hidden'); }
     }
-    requestAnimationFrame(() => $('helpTitle').focus({ preventScroll: true }));
+    requestAnimationFrame(() => $('cameraHelpTitle').focus({ preventScroll: true }));
   }
   const live = status === 'live' || status === 'paused';
   document.body.dataset.media = live || (starting && document.body.dataset.media === 'live') ? 'live' : 'none';
