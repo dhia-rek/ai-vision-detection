@@ -1,12 +1,14 @@
-"""Object detectors and drawing helpers.
+"""Shared detection types, the YOLO object detector and drawing helpers.
 
 `YoloDetector` wraps Ultralytics YOLOv8. `StubDetector` returns fixed boxes and
 never imports torch, so tests and smoke checks run in seconds without weights.
+Face and sign analyzers (faces.py, sign.py) return the same `Detection` type.
 """
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+import threading
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
@@ -22,14 +24,21 @@ class Detection:
     y1: float
     x2: float
     y2: float
+    # Optional keypoints in pixels (e.g. 21 hand landmarks), drawn as a skeleton.
+    points: tuple[tuple[float, float], ...] = ()
+    # Mode-specific extras (top-3 scores, gesture, letter, ...), passed through to JSON.
+    extra: dict = field(default_factory=dict, compare=False)
 
     def to_dict(self) -> dict:
-        d = asdict(self)
-        return {
-            "class": d["label"],
-            "confidence": round(d["confidence"], 4),
-            "bbox": {k: round(d[k], 1) for k in ("x1", "y1", "x2", "y2")},
+        d = {
+            "class": self.label,
+            "confidence": round(self.confidence, 4),
+            "bbox": {k: round(getattr(self, k), 1) for k in ("x1", "y1", "x2", "y2")},
         }
+        if self.points:
+            d["points"] = [[round(x, 1), round(y, 1)] for x, y in self.points]
+        d.update(self.extra)
+        return d
 
 
 class Detector(Protocol):
@@ -48,9 +57,11 @@ class YoloDetector:
         self.conf = conf
         self.device = device
         self.name = Path(str(weights)).stem
+        self._lock = threading.Lock()
 
     def detect(self, image: np.ndarray) -> list[Detection]:
-        result = self.model.predict(image, conf=self.conf, device=self.device, verbose=False)[0]
+        with self._lock:
+            result = self.model.predict(image, conf=self.conf, device=self.device, verbose=False)[0]
         names = result.names
         out = []
         for box in result.boxes:
@@ -76,12 +87,25 @@ def _color(label: str) -> tuple[int, int, int]:
     return tuple(int(c) for c in rng.integers(60, 255, size=3))
 
 
+# MediaPipe hand skeleton (pairs of landmark indices).
+HAND_EDGES = (
+    (0, 1), (1, 2), (2, 3), (3, 4), (0, 5), (5, 6), (6, 7), (7, 8), (5, 9), (9, 10), (10, 11),
+    (11, 12), (9, 13), (13, 14), (14, 15), (15, 16), (13, 17), (0, 17), (17, 18), (18, 19), (19, 20),
+)  # fmt: skip
+
+
 def annotate(image: np.ndarray, detections: list[Detection]) -> np.ndarray:
     """Draw boxes and labels with plain OpenCV (no font download needed)."""
     out = image.copy()
     thickness = max(1, round(min(out.shape[:2]) / 400))
     for d in detections:
         color = _color(d.label)
+        if len(d.points) == 21:
+            pts = [(int(x), int(y)) for x, y in d.points]
+            for a, b in HAND_EDGES:
+                cv2.line(out, pts[a], pts[b], (255, 255, 255), thickness + 1, cv2.LINE_AA)
+            for p in pts:
+                cv2.circle(out, p, thickness + 2, color, -1, cv2.LINE_AA)
         p1, p2 = (int(d.x1), int(d.y1)), (int(d.x2), int(d.y2))
         cv2.rectangle(out, p1, p2, color, thickness + 1)
         text = f"{d.label} {d.confidence:.2f}"
