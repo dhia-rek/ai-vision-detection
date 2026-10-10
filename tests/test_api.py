@@ -33,6 +33,14 @@ def test_index_served(client):
     assert "text/html" in r.headers["content-type"]
 
 
+def test_browser_asl_model_is_served(client):
+    r = client.get("/api/models/asl-letters-web")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("application/json")
+    assert r.json()["feature_version"] == 3
+    assert r.json()["input_size"] == 287
+
+
 def test_modes_endpoint(client):
     body = client.get("/api/modes").json()
     assert set(body["modes"]) == {"objects", "faces", "sign"}

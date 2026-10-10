@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 from app.asl_classifier import AslLetterClassifier
 from app.sign_features import FEATURE_VERSION, N_FEATURES, landmark_features_batch
 
@@ -61,3 +62,19 @@ def test_browser_export_matches_python_and_is_reproducible(tmp_path):
         python_prob = classifier.predict_proba(points, aspect)
         np.testing.assert_allclose(browser_prob, python_prob, atol=1e-4, rtol=1e-4)
         assert document["classes"][browser_prob.argmax()] == classifier.predict(points, aspect)[0]
+
+
+@pytest.mark.parametrize("invalid", ["zero_std", "missing_middle_layer"])
+def test_export_rejects_invalid_checkpoint(tmp_path, invalid):
+    with np.load(MODEL, allow_pickle=False) as source:
+        arrays = {name: source[name] for name in source.files}
+    if invalid == "zero_std":
+        arrays["std"] = arrays["std"].copy()
+        arrays["std"][0] = 0
+    else:
+        del arrays["W2"]
+        del arrays["b2"]
+    bad = tmp_path / "invalid.npz"
+    np.savez(bad, **arrays)
+    with pytest.raises(ValueError):
+        export(bad, tmp_path / "invalid.json")
