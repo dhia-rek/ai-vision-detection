@@ -1,119 +1,111 @@
-/* YOLO11n inference off the UI thread. The only input is a transferred camera bitmap. */
-/* global ort */
-const root = new URL('../', self.location.href);
-const modelRoot = new URL('models/objects/', root);
-let session, inputSize, labels, provider;
-let canvas, context;
+/* YOLO11n inference off the UI thread. The only input is a transferred camera bitmap; nothing is uploaded. */
+import { loadOrt, createSession } from './web-ort.js';
+import { fetchModel, megabytes } from './web-fetch.js';
 
-function report(stage, detail = '') { self.postMessage({ type: 'progress', stage, detail }); }
+const MODEL_ROOT = new URL('../models/objects/', import.meta.url);
+const CONF = 0.25, NMS_IOU = 0.7, MAX_DET = 300;
+const STRIDE = 32;
+let ort, session, size = 0, labels = null, backend = '';
+let canvas = null, context = null, tensor = null;
 
-async function load(size) {
-  if (session && inputSize === size) return;
+const report = (stage, detail, extra = {}) => self.postMessage({ type: 'progress', stage, detail, ...extra });
+
+/** `requested` is 320, 640 or 'auto' (640 only when the GPU build is in use, 320 otherwise). */
+async function init(requested) {
+  if (session) return;
   report('runtime', 'Loading ONNX Runtime');
-  if (!self.ort) importScripts(new URL('vendor/ort/ort.webgpu.min.js', root).href);
-  ort.env.wasm.wasmPaths = new URL('vendor/ort/', root).href;
-  ort.env.wasm.numThreads = 1;
-  const modelUrl = new URL(`yolo11n-${size}.onnx`, modelRoot);
-  report('model', `YOLO11n · ${(size === 320 ? 10.6 : 10.7).toFixed(1)} MB`);
-  const response = await fetch(modelUrl);
-  if (!response.ok) throw new Error(`Could not load object model (${response.status})`);
-  const model = await response.arrayBuffer();
-  if (!labels) {
-    const labelResponse = await fetch(new URL('labels.json', modelRoot));
-    if (!labelResponse.ok) throw new Error('Could not load object labels');
-    labels = await labelResponse.json();
-  }
-  const options = { executionProviders: self.navigator?.gpu ? ['webgpu', 'wasm'] : ['wasm'] };
-  try {
-    session = await ort.InferenceSession.create(model, options);
-    provider = self.navigator?.gpu ? 'WebGPU' : 'WASM';
-  } catch (error) {
-    if (!self.navigator?.gpu) throw error;
-    report('runtime', 'WebGPU unavailable; using WASM');
-    session = await ort.InferenceSession.create(model, { executionProviders: ['wasm'] });
-    provider = 'WASM';
-  }
-  inputSize = size;
-  canvas = new OffscreenCanvas(size, size);
-  context = canvas.getContext('2d', { willReadFrequently: true });
-  report('ready', `${provider} · ${size}px`);
+  const runtime = await loadOrt({ onProgress: (p) => report('runtime', p.detail, p) });
+  ort = runtime.ort;
+  const buffer = await fetchModel(new URL('yolo11n.onnx', MODEL_ROOT), ({ loaded, total, cached }) =>
+    report('model', cached ? `YOLO11n · ${megabytes(total)} MB (saved on this device)` : `YOLO11n · ${megabytes(loaded)} / ${megabytes(total)} MB`,
+      { loaded, total }));
+  if (!labels) labels = await (await fetch(new URL('labels.json', MODEL_ROOT))).json();
+  report('compile', 'Preparing the model');
+  ({ session, backend } = await createSession(runtime, buffer));
+  size = requested === 'auto' ? (backend === 'WebGPU' ? 640 : 320) : requested;
 }
 
+/**
+ * Letterbox exactly like Ultralytics' rectangular inference (`LetterBox(auto=True)`): scale to fit
+ * `size`, pad only up to the next multiple of 32 with grey 114, centred. The network is dynamic-shape,
+ * so a 4:3 camera costs 480 rows instead of 640. Fills the shared input tensor.
+ */
 function prepare(bitmap) {
   const { width, height } = bitmap;
-  const scale = Math.min(inputSize / width, inputSize / height);
+  const scale = Math.min(size / width, size / height);
   const drawnWidth = Math.round(width * scale), drawnHeight = Math.round(height * scale);
-  const padX = Math.round((inputSize - drawnWidth) / 2 - 0.1);
-  const padY = Math.round((inputSize - drawnHeight) / 2 - 0.1);
-  context.fillStyle = 'rgb(114,114,114)';
-  context.fillRect(0, 0, inputSize, inputSize);
-  context.drawImage(bitmap, padX, padY, drawnWidth, drawnHeight);
-  bitmap.close();
-  const rgba = context.getImageData(0, 0, inputSize, inputSize).data;
-  const pixels = inputSize * inputSize, tensor = new Float32Array(pixels * 3);
-  for (let i = 0; i < pixels; i++) {
-    const j = i * 4;
-    tensor[i] = rgba[j] / 255;
-    tensor[pixels + i] = rgba[j + 1] / 255;
-    tensor[pixels * 2 + i] = rgba[j + 2] / 255;
+  const padW = (size - drawnWidth) % STRIDE / 2, padH = (size - drawnHeight) % STRIDE / 2;
+  const left = Math.round(padW - 0.1), top = Math.round(padH - 0.1);
+  const netW = drawnWidth + left + Math.round(padW + 0.1), netH = drawnHeight + top + Math.round(padH + 0.1);
+  if (!canvas || canvas.width !== netW || canvas.height !== netH) {
+    canvas = new OffscreenCanvas(netW, netH);
+    context = canvas.getContext('2d', { willReadFrequently: true });
+    tensor = new Float32Array(3 * netW * netH);
   }
-  return { tensor, width, height, scale, padX, padY };
+  context.fillStyle = 'rgb(114,114,114)';
+  context.fillRect(0, 0, netW, netH);
+  context.drawImage(bitmap, left, top, drawnWidth, drawnHeight);
+  bitmap.close();
+  const rgba = context.getImageData(0, 0, netW, netH).data, pixels = netW * netH;
+  for (let i = 0, j = 0; i < pixels; i++, j += 4) {
+    tensor[i] = rgba[j] / 255; tensor[pixels + i] = rgba[j + 1] / 255; tensor[2 * pixels + i] = rgba[j + 2] / 255;
+  }
+  return { width, height, scale, padX: left, padY: top, netW, netH };
 }
 
 function overlap(a, b) {
-  const w = Math.max(0, Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1));
-  const h = Math.max(0, Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1));
-  const intersection = w * h;
-  return intersection / ((a.x2 - a.x1) * (a.y2 - a.y1) + (b.x2 - b.x1) * (b.y2 - b.y1) - intersection || 1);
+  const w = Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1), h = Math.min(a.y2, b.y2) - Math.max(a.y1, b.y1);
+  if (w <= 0 || h <= 0) return 0;
+  const inter = w * h;
+  return inter / ((a.x2 - a.x1) * (a.y2 - a.y1) + (b.x2 - b.x1) * (b.y2 - b.y1) - inter);
 }
 
+/** Decode the (1, 4+classes, anchors) output, then class-aware NMS (what Ultralytics does by default). */
 function decode(output, frame) {
-  const data = output.data, channels = output.dims[1], anchors = output.dims[2];
-  if (channels !== labels.length + 4) throw new Error(`Unexpected YOLO output: ${output.dims}`);
+  const { data } = output, channels = output.dims[1], anchors = output.dims[2];
+  if (channels !== labels.length + 4) throw new Error(`Unexpected YOLO output shape: ${output.dims}`);
+  const clampX = (v) => Math.max(0, Math.min(frame.width, (v - frame.padX) / frame.scale));
+  const clampY = (v) => Math.max(0, Math.min(frame.height, (v - frame.padY) / frame.scale));
   const candidates = [];
   for (let i = 0; i < anchors; i++) {
-    let confidence = 0, classId = -1;
+    let best = CONF, classId = -1;
     for (let c = 4; c < channels; c++) {
       const score = data[c * anchors + i];
-      if (score > confidence) { confidence = score; classId = c - 4; }
+      if (score > best) { best = score; classId = c - 4; }
     }
-    if (confidence < 0.25) continue;
+    if (classId < 0) continue;
     const cx = data[i], cy = data[anchors + i], w = data[2 * anchors + i], h = data[3 * anchors + i];
-    const clampX = (v) => Math.max(0, Math.min(frame.width, (v - frame.padX) / frame.scale));
-    const clampY = (v) => Math.max(0, Math.min(frame.height, (v - frame.padY) / frame.scale));
-    const x1 = clampX(cx - w / 2), y1 = clampY(cy - h / 2);
-    const x2 = clampX(cx + w / 2), y2 = clampY(cy + h / 2);
-    if (x2 <= x1 || y2 <= y1) continue;
-    candidates.push({ classId, confidence, x1, y1, x2, y2 });
+    candidates.push({ classId, confidence: best, x1: clampX(cx - w / 2), y1: clampY(cy - h / 2), x2: clampX(cx + w / 2), y2: clampY(cy + h / 2) });
   }
   candidates.sort((a, b) => b.confidence - a.confidence);
   const kept = [];
-  for (const box of candidates.slice(0, 30000)) {
-    if (kept.some((prior) => prior.classId === box.classId && overlap(prior, box) > 0.7)) continue;
+  for (const box of candidates) {
+    if (box.x2 <= box.x1 || box.y2 <= box.y1) continue;
+    if (kept.some((prior) => prior.classId === box.classId && overlap(prior, box) > NMS_IOU)) continue;
     kept.push(box);
-    if (kept.length >= 300) break;
+    if (kept.length >= MAX_DET) break;
   }
-  return kept.map(({ classId, confidence, x1, y1, x2, y2 }) => ({
-    class: labels[classId], confidence,
-    bbox: { x1, y1, x2, y2 },
-  }));
+  return kept.map(({ classId, confidence, x1, y1, x2, y2 }) => ({ class: labels[classId], confidence, bbox: { x1, y1, x2, y2 } }));
 }
 
 self.onmessage = async ({ data }) => {
   try {
     if (data.type === 'init') {
-      await load(data.size);
-      self.postMessage({ type: 'ready', provider, size: inputSize });
+      await init(data.size);
+      report('ready', `${backend} · ${size}px`);
+      self.postMessage({ type: 'result', id: data.id, data: { backend, size } });
     } else if (data.type === 'frame') {
       const start = performance.now();
       const frame = prepare(data.bitmap);
-      const input = new ort.Tensor('float32', frame.tensor, [1, 3, inputSize, inputSize]);
-      const outputs = await session.run({ [session.inputNames[0]]: input });
+      const prepared = performance.now();
+      const outputs = await session.run({ [session.inputNames[0]]: new ort.Tensor('float32', tensor, [1, 3, frame.netH, frame.netW]) });
+      const ran = performance.now();
       const detections = decode(outputs[session.outputNames[0]], frame);
+      const end = performance.now();
       self.postMessage({ type: 'result', id: data.id, data: {
-        detections, image_size: { width: frame.width, height: frame.height },
-        mode: 'objects', model_used: `yolo11n-${inputSize}`, device: provider,
-        inference_ms: performance.now() - start,
+        detections, image_size: { width: frame.width, height: frame.height }, mode: 'objects',
+        model_used: `yolo11n-${size}`, device: backend, inference_ms: end - start,
+        timing_ms: { prepare: prepared - start, model: ran - prepared, decode: end - ran },
       } });
     }
   } catch (error) {

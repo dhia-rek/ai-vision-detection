@@ -28,3 +28,17 @@ Format `dhia-asl-mlp`, `format_version: 1`:
 The API serves the committed export at `GET /api/models/asl-letters-web`. A browser
 implementation can fetch that URL; the separate UI branch still needs to port the
 v3 feature transform and inference before this becomes live browser-side detection.
+
+## Static browser app: `export_web_models.py`, `build_pages_artifact.py`, `web_bench.py`
+
+- `uv run --with onnx --with onnxslim python scripts/export_web_models.py [--only asl objects faces vendor] [--force]`
+  - `asl`: runs `export_asl_web.py`, then copies the JSON to `backend/static/models/asl_letters_web.json` (the file the
+    browser fetches). Retrained weights with the same `feature_version` drop in without a JavaScript change.
+  - `objects`: exports `yolo11n.pt` to one dynamic-shape ONNX (opset 17) used at 320 and 640 px, plus `labels.json`.
+  - `faces`: copies the verified FER model and derives the dynamic-input YuNet from the zoo file.
+  - `vendor`: downloads the pinned ONNX Runtime Web 1.22.0, MediaPipe Tasks Vision 0.10.21 and the gesture task into
+    `backend/static/vendor/` (git-ignored), verifying the npm SRI hashes / zoo SHA-256.
+- `uv run python scripts/build_pages_artifact.py --out dist/vision [--serve 8013]` assembles `index.html` + `static/` with
+  relative URLs (mountable at `/vision/`) and optionally serves it.
+- `uv run python scripts/web_bench.py [--only objects/phone] [--out bench.json]` measures FPS, latency and download size per
+  mode and device class in headless Chromium with a fake 30 fps camera (`taskset -c 0,1 ...` pins the CPU count).

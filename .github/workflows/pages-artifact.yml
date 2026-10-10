@@ -1,9 +1,12 @@
-name: Static Pages artifact (no deployment)
+name: Static site artifact (not deployed)
+
+# Builds the browser-only app exactly as it will be mounted at /vision/ on dhiarekik.me and uploads it as
+# a workflow artifact. Nothing is published from here: a separate job places the artifact on the portfolio site.
 
 on:
   pull_request:
   push:
-    branches: [main, feat/ui-v2]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -11,36 +14,32 @@ permissions:
 
 jobs:
   build-artifact:
-    name: Export and upload static app
+    name: Build and upload the static app
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-      - name: Export browser ASL weights
-        run: uv run --with numpy python scripts/export_web_models.py
-      - name: Assemble subpath-safe artifact
-        shell: bash
+      - name: Cache pretrained models (gesture task)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ai-vision-detection/models
+          key: models-${{ hashFiles('backend/app/zoo.py') }}
+      - name: Fetch pinned runtimes (ONNX Runtime Web, MediaPipe) and verify their checksums
+        run: uv run --no-project python scripts/export_web_models.py --only vendor
+      - name: Assemble the artifact (index.html + static/, relative URLs only)
+        run: uv run --no-project python scripts/build_pages_artifact.py --out artifact
+      - name: Sanity-check the artifact
         run: |
           set -euo pipefail
-          mkdir -p artifact/static
-          cp backend/static/index.html artifact/index.html
-          find backend/static -mindepth 1 -maxdepth 1 ! -name index.html \
-            -exec cp -a {} artifact/static/ \;
-          # Root-style home links would escape /vision on the portfolio origin.
-          python - <<'PY'
-          from pathlib import Path
-
-          index = Path("artifact/index.html")
-          html = index.read_text(encoding="utf-8")
-          html = html.replace('href="/"', 'href="./"')
-          index.write_text(html, encoding="utf-8")
-          PY
           test -f artifact/index.html
-          test -f artifact/static/app.js
-          test -f artifact/static/models/asl_letters.json
-      - name: Upload Pages-ready artifact (not deployed)
+          test -f artifact/static/models/objects/yolo11n.onnx
+          test -f artifact/static/vendor/ort/ort.wasm.min.mjs
+          # Every asset URL must be relative so the app can live under any sub-path.
+          ! grep -nE '(src|href)="/[^"]' artifact/index.html
+          du -sh artifact
+      - name: Upload artifact (not deployed)
         uses: actions/upload-artifact@v4
         with:
           name: vision-static-site

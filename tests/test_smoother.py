@@ -1,5 +1,4 @@
 import json
-import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -43,24 +42,22 @@ def test_low_smoothed_confidence_returns_no_letter():
 
 
 def test_python_javascript_parity():
+    """The browser's ESM port (web-asl.js) gives the same letters and confidences as the Python class."""
     node = shutil.which("node")
     if not node:
         pytest.skip("node is unavailable")
-    js_path = Path(__file__).parents[1] / "backend/static/app.js"
-    source = js_path.read_text()
-    match = re.search(r"class LetterSmoother\s*\{.*?\n\}", source, re.S)
-    assert match
+    module = (Path(__file__).parents[1] / "backend/static/js/web-asl.js").as_uri()
     frames = [scores(c) for c in "AABAAABBBBB"]
     frames[4] = None
     times = [i * 0.1 for i in range(len(frames))]
     script = (
-        match.group(0)
-        + "\nconst s = new LetterSmoother();\n"
+        f"import {{ LetterSmoother }} from {json.dumps(module)};\n"
+        + "const s = new LetterSmoother();\n"
         + f"const frames = {json.dumps(frames)};\n"
         + f"const times = {json.dumps(times)};\n"
         + "console.log(JSON.stringify(frames.map((f,i)=>s.feed(f,times[i]))));"
     )
-    actual = json.loads(subprocess.check_output([node, "-e", script], text=True))
+    actual = json.loads(subprocess.check_output([node, "--input-type=module", "-e", script], text=True))
     smoother = LetterSmoother()
     expected = [smoother.feed(frame, timestamp) for frame, timestamp in zip(frames, times, strict=True)]
     for observed, wanted in zip(actual, expected, strict=True):

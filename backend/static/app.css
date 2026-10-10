@@ -399,6 +399,19 @@ html[data-theme="dark"] #themeToggle .icon-sun {
   border-radius: 50%;
   animation: load-spin .8s linear infinite;
 }
+.model-load progress {
+  width: min(280px, 70%);
+  height: 6px;
+  appearance: none;
+  border: 0;
+  border-radius: 99px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, .22);
+}
+.model-load progress::-webkit-progress-bar { background: rgba(255, 255, 255, .22); }
+.model-load progress::-webkit-progress-value { background: var(--accent-2); border-radius: 99px; }
+.model-load progress::-moz-progress-bar { background: var(--accent-2); border-radius: 99px; }
+.model-load progress[hidden] { display: none; }
 @keyframes load-spin { to { transform: rotate(360deg); } }
 body[data-media="live"] .viewport {
   background: #080b12;

@@ -147,7 +147,6 @@ function wireBuilder() {
 registerMode({
   id: 'sign', order: 3, title: 'Sign language', sub: (s) => s.sign === 'spell' ? 'ASL fingerspelling, letters A to Z' : 'Seven static hand gestures',
   empty: 'Reads ASL fingerspelling and hand gestures, letter by letter, and spells words.', panel: 'insightSign',
-  query: (s) => `mode=sign&sign_mode=${encodeURIComponent(s.sign)}`,
   onEnter() { resetSpell(); }, onLeave() { resetTryProgress(); },
   onReset() { resetSpell(); builder.clear(); },
   onResult(dets) {
