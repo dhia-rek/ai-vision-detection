@@ -24,6 +24,8 @@ jobs:
           key: models-${{ hashFiles('backend/app/zoo.py') }}
       - run: uv run ruff check .
       - run: uv run ruff format --check .
+      - run: uv run mypy
+      - run: uv run interrogate
       - run: uv run pytest -q -rs
 
   smoke:
