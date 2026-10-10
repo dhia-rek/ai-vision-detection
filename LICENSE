@@ -23,9 +23,9 @@ SOFTWARE.
 -------------------------------------------------------------------------------
 Third-party components (NOT covered by the MIT license above)
 
-- Ultralytics YOLOv8 library and the pretrained weights committed in this
-  repository (yolov8n.pt, backend/yolov8n.pt, backend/app/yolov8n.pt,
-  yolov8m.pt) are licensed under AGPL-3.0 by Ultralytics
+- Ultralytics YOLO library and the pretrained YOLO11n weights used by this
+  repository (downloaded from the official Ultralytics assets release) are
+  licensed under AGPL-3.0 by Ultralytics
   (https://github.com/ultralytics/ultralytics/blob/main/LICENSE).
   Distributing this app, or serving it over a network, together with them
   is subject to the AGPL-3.0 terms unless you hold an Ultralytics Enterprise
