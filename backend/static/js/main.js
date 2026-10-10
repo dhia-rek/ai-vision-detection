@@ -93,7 +93,7 @@ function syncCamera(status) {
     requestAnimationFrame(() => $('helpTitle').focus({ preventScroll: true }));
   }
   const live = status === 'live' || status === 'paused';
-  document.body.dataset.media = live ? 'live' : 'none';
+  document.body.dataset.media = live || (starting && document.body.dataset.media === 'live') ? 'live' : 'none';
   $('playBtn').dataset.state = status === 'paused' ? 'paused' : 'live';
   $('playLabel').textContent = status === 'paused' ? 'Resume' : 'Pause';
   $('stopBtn').disabled = !live && status !== 'starting';

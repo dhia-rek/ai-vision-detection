@@ -650,6 +650,9 @@ body[data-mirror="true"] #video {
 .cam-help[data-kind="nocamera"] .empty-badge-warn {
   color: var(--danger);
 }
+.viewport:has(#camHelp:not(.hidden)) .vp-top {
+  display: none;
+}
 .vp-error {
   position: absolute;
   z-index: 5;
@@ -1380,6 +1383,8 @@ body[data-media="none"] .toolbar {
   place-items: center;
 }
 .chart-img img {
+  width: 32px;
+  height: 32px;
   max-width: 32px;
   max-height: 32px;
   object-fit: contain;
@@ -1806,7 +1811,7 @@ body[data-media="none"] [data-stat]:not([data-stat="model"]):not([data-stat="dev
     gap: 8px;
   }
   .viewport {
-    width: 100%;
+    width: min(100%, calc(60dvh * var(--ar, 1.7778)));
     max-width: 100%;
     max-height: 60dvh;
     border-radius: 12px;
@@ -2090,6 +2095,8 @@ body[data-media="none"] [data-stat]:not([data-stat="model"]):not([data-stat="dev
     height: 27px;
   }
   .chart-img img {
+    width: 27px;
+    height: 27px;
     max-width: 27px;
     max-height: 27px;
   }
@@ -2218,8 +2225,8 @@ html[data-embed="true"] .toolbar .btn {
 }
 @media (max-width: 699px) {
   html[data-embed="true"] .topbar {
-    height: 44px;
-    min-height: 44px;
+    height: 56px;
+    min-height: 56px;
     padding: 3px 8px;
   }
   html[data-embed="true"] .segmented-modes .seg {
@@ -2242,8 +2249,8 @@ html[data-embed="true"] .toolbar .btn {
     background: transparent;
   }
   html[data-embed="true"] .viewport {
-    width: 100%;
-    max-height: calc(100dvh - 118px);
+    width: min(100%, calc((100dvh - 130px) * var(--ar, 1.7778)));
+    max-height: calc(100dvh - 130px);
   }
   html[data-embed="true"] .panel {
     height: auto;
