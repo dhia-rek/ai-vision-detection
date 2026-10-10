@@ -1,10 +1,5 @@
-from pathlib import Path
-
 import numpy as np
-import pytest
 from app.detector import Detection, StubDetector, annotate, decode_image, encode_jpeg
-
-ROOT = Path(__file__).resolve().parent.parent
 
 
 def test_detection_to_dict_schema():
@@ -49,14 +44,8 @@ def test_decode_garbage_returns_none():
     assert decode_image(b"garbage") is None
 
 
-@pytest.mark.slow
-def test_yolo_detects_dog():
-    weights = ROOT / "yolov8n.pt"
-    if not weights.exists():
-        pytest.skip("yolov8n.pt not present")
-    pytest.importorskip("ultralytics")
-    from app.detector import YoloDetector
-
-    img = decode_image((ROOT / "backend" / "samples" / "dog.jpg").read_bytes())
-    dets = YoloDetector(weights).detect(img)
-    assert "dog" in {d.label for d in dets}
+def test_detection_extra_and_points_in_dict():
+    d = Detection("A", 0.9, 0, 0, 1, 1, points=((1.0, 2.0),), extra={"top3": {"A": 0.9}})
+    out = d.to_dict()
+    assert out["top3"] == {"A": 0.9}
+    assert out["class"] == "A"

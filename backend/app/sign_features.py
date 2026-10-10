@@ -7,6 +7,7 @@ every hand looks like a right hand. ``None``/unknown handedness is left as-is
 Note: MediaPipe's handedness label assumes a mirrored (selfie) image; pass the
 label consistently with how the image was fed to MediaPipe.
 """
+
 import numpy as np
 
 FEATURE_VERSION = 1
