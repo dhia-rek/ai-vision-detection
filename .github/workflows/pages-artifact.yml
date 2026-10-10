@@ -1,0 +1,49 @@
+name: Static Pages artifact (no deployment)
+
+on:
+  pull_request:
+  push:
+    branches: [main, feat/ui-v2]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-artifact:
+    name: Export and upload static app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Export browser ASL weights
+        run: uv run --with numpy python scripts/export_web_models.py
+      - name: Assemble subpath-safe artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifact/static
+          cp backend/static/index.html artifact/index.html
+          find backend/static -mindepth 1 -maxdepth 1 ! -name index.html \
+            -exec cp -a {} artifact/static/ \;
+          # Root-style home links would escape /vision on the portfolio origin.
+          python - <<'PY'
+          from pathlib import Path
+
+          index = Path("artifact/index.html")
+          html = index.read_text(encoding="utf-8")
+          html = html.replace('href="/"', 'href="./"')
+          index.write_text(html, encoding="utf-8")
+          PY
+          test -f artifact/index.html
+          test -f artifact/static/app.js
+          test -f artifact/static/models/asl_letters.json
+      - name: Upload Pages-ready artifact (not deployed)
+        uses: actions/upload-artifact@v4
+        with:
+          name: vision-static-site
+          path: artifact/
+          if-no-files-found: error
+          retention-days: 14

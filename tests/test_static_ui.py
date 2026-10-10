@@ -13,6 +13,7 @@ ALLOWED_URLS = {
     "https://github.com/dhia-rek/ai-vision-detection",
     "https://lucide.dev",
     "https://dhiarekik.me",
+    "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task",
 }
 BRAND_TOKENS = {
     "--bg": ("#f6f9fd", "#0a0e1f"),
@@ -209,6 +210,11 @@ def test_static_content_rules():
     all_content = "\n".join(contents.values())
     external_urls = [
         url for url in re.findall(r"https?://[^\s\"'<>),]+", all_content) if "w3.org/2000/svg" not in url
+    ]
+    # MediaPipe Tasks Vision is pinned; template-literal URLs carry a runtime version constant.
+    external_urls = [
+        url for url in external_urls
+        if "cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TASKS_VISION_VERSION}" not in url
     ]
     assert set(external_urls) <= ALLOWED_URLS
 

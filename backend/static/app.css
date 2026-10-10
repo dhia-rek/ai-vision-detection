@@ -374,6 +374,32 @@ html[data-theme="dark"] #themeToggle .icon-sun {
 .viewport.overlay-off canvas {
   opacity: 0;
 }
+.model-load {
+  position: absolute;
+  z-index: 6;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 24px;
+  text-align: center;
+  color: #fff;
+  background: rgba(10, 14, 31, .82);
+  backdrop-filter: blur(8px);
+}
+.model-load strong { font: 600 18px var(--font-head); }
+.model-load span:last-child { font-size: 13px; color: #d8e4ff; }
+.model-load-spinner {
+  width: 34px;
+  height: 34px;
+  border: 3px solid rgba(255, 255, 255, .25);
+  border-top-color: var(--accent-2);
+  border-radius: 50%;
+  animation: load-spin .8s linear infinite;
+}
+@keyframes load-spin { to { transform: rotate(360deg); } }
 body[data-media="live"] .viewport {
   background: #080b12;
   border-color: rgba(255, 255, 255, 0.18);

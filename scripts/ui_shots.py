@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import subprocess
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -34,7 +33,7 @@ class ShotResult:
 def parse_args() -> argparse.Namespace:
     """Parse command-line options for screenshot capture."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--base", default="http://127.0.0.1:8011", help="Base URL of the UI")
+    parser.add_argument("--base", default="http://127.0.0.1:8013", help="Base URL of the static UI")
     parser.add_argument("--out", default=".agent-scratch/ui-v2-shots", help="Screenshot output directory")
     parser.add_argument("--only", help="Capture shot names containing this substring")
     return parser.parse_args()
@@ -198,13 +197,8 @@ def run_shot(
           }} }});
         }})();""")
     page = context.new_page()
-    analysis_responses = [0]
-
-    def count_analysis(response: Any) -> None:
-        if "/api/analyze" in response.url:
-            analysis_responses[0] += 1
-
-    page.on("response", count_analysis)
+    api_requests: list[str] = []
+    page.on("request", lambda request: api_requests.append(request.url) if "/api/" in request.url else None)
     attach_audit(page, result)
     params = {"mode": mode, "theme": theme}
     if sign_mode:
@@ -224,21 +218,20 @@ def run_shot(
             )
         elif camera:
             page.wait_for_function("() => document.body.dataset.camera === 'live'", timeout=60_000)
-            response_deadline = time.monotonic() + 90
-            while not analysis_responses[0] and time.monotonic() < response_deadline:
-                page.wait_for_timeout(200)
-            if not analysis_responses[0]:
-                raise TimeoutError("no /api/analyze response received from the live camera")
             if results_wait:
                 result_checks = {
-                    "objects": "Boolean(document.querySelector('#objBars .bar-row'))",
-                    "faces": "Boolean(document.querySelector('#faceList .face'))",
-                    "sign": "!['–', '-'].includes(document.querySelector('#signMain')?.textContent.trim())",
+                    # The FPS/model counters update even when the current frame has no detections.
+                    # This proves inference completed without requiring a particular prediction.
+                    "objects": "document.querySelector('#modelName')?.textContent !== '–' && document.querySelector('#latency')?.textContent !== '–'",
+                    "faces": "document.querySelector('#modelName')?.textContent !== '–' && document.querySelector('#latency')?.textContent !== '–'",
+                    "sign": "document.querySelector('#modelName')?.textContent !== '–' && document.querySelector('#latency')?.textContent !== '–'",
                 }
                 page.wait_for_function(
                     f"() => {result_checks[mode]}",
                     timeout=90_000,
                 )
+                if api_requests:
+                    result.problems.append(f"browser attempted server API request(s): {api_requests}")
             if filters:
                 page.locator("#minConf").evaluate(
                     "element => { element.value = '65'; "
@@ -260,6 +253,8 @@ def run_shot(
             page.wait_for_timeout(500)
         else:
             page.wait_for_timeout(350)
+        if api_requests:
+            result.problems.append(f"camera-only UI issued server API request(s): {api_requests}")
         check_layout(page, result, embed=embed)
         # Full-page captures stitch the page, which draws fixed elements (skip link, toasts) in odd places.
         hidden = ".skip-link{display:none!important}" + (

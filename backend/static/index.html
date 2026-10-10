@@ -7,8 +7,8 @@
 <meta name="description" content="Real-time object detection, facial expression and ASL fingerspelling recognition in the browser. CPU only.">
 <title>AI Vision Detection &middot; objects, expressions and sign language</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E">
-<link rel="preload" href="/static/fonts/Lexend-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/static/fonts/Figtree-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="static/fonts/Lexend-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="static/fonts/Figtree-latin.woff2" as="font" type="font/woff2" crossorigin>
 <script>
 // Before first paint: theme (?theme=, else the stored choice, else light) and embed mode (?embed=1).
 (function () {
@@ -19,7 +19,7 @@
   if (q && q.get('embed') === '1') document.documentElement.dataset.embed = 'true';
 })();
 </script>
-<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="static/app.css">
 </head>
 <body data-mode="objects" data-state="idle" data-media="none" data-orient="landscape">
 
@@ -201,6 +201,11 @@
     <!-- --ar (camera aspect ratio, set from JS) makes the viewport hug the video: no letterbox bars. -->
     <div class="viewport" id="viewport" tabindex="0" aria-label="Live camera view. Press space to pause or resume.">
       <video id="video" playsinline muted autoplay></video>
+      <div class="model-load hidden" id="modelLoad" role="status" aria-live="polite">
+        <span class="model-load-spinner" aria-hidden="true"></span>
+        <strong id="modelLoadTitle">Preparing model</strong>
+        <span id="modelLoadDetail">Loading on this device…</span>
+      </div>
       <canvas id="overlay" aria-hidden="true"></canvas>
 
       <div class="vp-top">
@@ -219,7 +224,7 @@
         </div>
         <ul class="empty-steps" aria-label="How the camera is used">
           <li><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg><span>Your browser will ask for camera access.</span></li>
-          <li><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg><span>Frames are analysed on the server and never stored.</span></li>
+          <li><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg><span>Camera frames stay on this device.</span></li>
           <li><svg class="icon" aria-hidden="true"><use href="#i-camera-off"/></svg><span>Stop at any time; the camera light goes off.</span></li>
         </ul>
       </div>
@@ -231,7 +236,7 @@
       -->
       <div class="cam-help hidden" id="camHelp" data-kind="denied">
         <span class="empty-badge empty-badge-warn"><svg class="icon empty-icon" aria-hidden="true"><use href="#i-camera-off"/></svg></span>
-        <h2 class="empty-title" id="helpTitle" tabindex="-1">The camera is blocked</h2>
+        <h2 class="empty-title" id="cameraHelpTitle" tabindex="-1">The camera is blocked</h2>
         <p class="empty-text" id="helpText">This page needs your camera, and the browser is not allowing it.</p>
         <div class="help-steps" id="helpSteps">
           <details class="howto" data-browser="chrome">
@@ -351,7 +356,7 @@
 
         <!-- Letters only: the "Try" challenge (shows the reference sign, checks the user's sign). -->
         <section class="try" id="tryCard" aria-labelledby="tryTitle" data-state="waiting">
-          <div class="try-ref"><img id="tryImg" src="/static/asl/B.svg" alt="ASL hand shape for the letter B" width="96" height="96"></div>
+          <div class="try-ref"><img id="tryImg" src="static/asl/B.svg" alt="ASL hand shape for the letter B" width="96" height="96"></div>
           <div class="try-body">
             <p class="eyebrow"><svg class="icon" aria-hidden="true"><use href="#i-target"/></svg>Challenge</p>
             <h2 class="try-title" id="tryTitle">Try: <span class="try-letter" id="tryLetter">B</span></h2>
@@ -422,9 +427,9 @@
         <polyline id="sparkLine" points=""/>
       </svg>
     </li>
-    <li class="stat" data-stat="latency" id="latencyStat" title="Round trip per frame">
+    <li class="stat" data-stat="latency" id="latencyStat" title="Processing time per frame">
       <svg class="icon" aria-hidden="true"><use href="#i-timer"/></svg>
-      <span class="stat-label">Latency</span>
+      <span class="stat-label">Frame</span>
       <span class="stat-value" id="latency">&ndash;</span>
     </li>
     <li class="stat" data-stat="model">
@@ -433,12 +438,12 @@
       <span class="stat-value stat-model" id="modelName">&ndash;</span>
     </li>
     <li class="stat badge-stat" data-stat="device">
-      <span class="badge" id="deviceBadge" title="Inference device"><svg class="icon" aria-hidden="true"><use href="#i-cpu"/></svg><span id="deviceText">CPU</span></span>
+      <span class="badge" id="deviceBadge" title="Inference device"><svg class="icon" aria-hidden="true"><use href="#i-cpu"/></svg><span id="deviceText">Browser</span></span>
     </li>
   </ul>
   <p class="privacy">
     <svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>
-    Nothing is saved: camera frames are analysed on the server and discarded after the response. Expression output is a guess about a face, not a judgement about a person.
+    Camera frames stay on your device. Nothing is uploaded or saved. Expression output is a guess about a face, not a judgement about a person.
     <a href="https://github.com/dhia-rek/ai-vision-detection" rel="noopener">Source</a>
   </p>
 </footer>
@@ -465,6 +470,6 @@
 </dialog>
 
 <canvas id="grab" class="hidden" aria-hidden="true"></canvas>
-<script type="module" src="/static/app.js"></script>
+<script type="module" src="static/app.js"></script>
 </body>
 </html>
