@@ -123,3 +123,16 @@ def test_path_traversal_rejected(client, name):
     assert b"create_app" not in r.content
     r = client.post(f"/demo/detect/{name}")
     assert r.status_code == 404
+
+
+def test_too_many_pixels(monkeypatch):
+    import cv2
+    import numpy as np
+    from app.detector import StubDetector
+    from app.main import create_app
+
+    monkeypatch.setenv("AVD_MAX_PIXELS", "0.01")  # 10k pixels
+    c = TestClient(create_app(detector=StubDetector()))
+    ok, buf = cv2.imencode(".png", np.zeros((200, 200, 3), dtype=np.uint8))
+    r = c.post("/detect/", files={"file": ("big.png", buf.tobytes(), "image/png")})
+    assert r.status_code == 413
