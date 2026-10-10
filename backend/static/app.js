@@ -130,8 +130,12 @@ function renderRecordCounts() {
   $('recordCounts').textContent = `${counts[$('recordLetter').value] || 0} for ${$('recordLetter').value} · ${recordings.length} samples total`;
 }
 function recordDetection(dets, size) {
-  if (!recording) return;
-  const hand = dets.reduce((a, d) => (!a || d.confidence > a.confidence ? d : a), null);
+  if (!recording || state.mode !== 'sign' || state.sign !== 'record') return;
+  if (dets.length !== 1) {
+    $('recordStatus').textContent = dets.length ? 'Show only one hand while recording.' : 'Show one hand to record.';
+    return;
+  }
+  const hand = dets[0];
   const points = hand && hand.landmarks;
   if (!Array.isArray(points) || points.length !== 21) return;
   const now = performance.now();
@@ -141,6 +145,7 @@ function recordDetection(dets, size) {
     if (delta < 0.002) return;
   }
   recordings.push({ letter: $('recordLetter').value, landmarks: points, handedness: hand.handedness || null, image_size: [size.w, size.h] });
+  $('recordStatus').textContent = 'Recording is on. Keep only the intended hand in view.';
   previousRecorded = points.map((p) => p.slice()); previousRecordAt = now;
   saveRecordings();
   if (recordings.length >= RECORD_LIMIT) {
@@ -1001,6 +1006,7 @@ function syncUrl() {
 
 function setMode(mode, sign) {
   const changed = mode !== state.mode || (sign && sign !== state.sign);
+  if (recording && (mode !== 'sign' || (sign && sign !== 'record'))) setRecording(false);
   state.mode = mode;
   if (sign) state.sign = sign;
   if (!changed) return syncUI();
@@ -1018,6 +1024,7 @@ function setMode(mode, sign) {
 
 function setSource(source) {
   if (source === state.source) return syncUI();
+  if (recording) setRecording(false);
   releaseMedia();
   state.source = source;
   letterSmoother.reset();
@@ -1111,7 +1118,7 @@ $('downloadRecord').addEventListener('click', () => {
   const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
   const a = document.createElement('a'); a.href = url; a.download = 'avd-recordings.json'; a.click(); URL.revokeObjectURL(url);
 });
-$('clearRecord').addEventListener('click', () => { recordings = []; saveRecordings(); $('recordStatus').textContent = 'Stored recordings cleared.'; });
+$('clearRecord').addEventListener('click', () => { setRecording(false); recordings = []; saveRecordings(); $('recordStatus').textContent = 'Stored recordings cleared.'; });
 renderRecordCounts();
 
 // ---------- init ----------
