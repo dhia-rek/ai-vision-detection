@@ -317,3 +317,4 @@ def test_javascript_uses_client_side_overlay_and_large_palette():
     palette = re.search(r"\bPALETTE\s*=\s*\[(.*?)\]", js, flags=re.DOTALL)
     assert palette
     assert len(re.findall(r"#[0-9a-fA-F]{6}", palette.group(1))) >= 8
+
