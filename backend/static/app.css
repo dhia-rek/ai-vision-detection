@@ -889,6 +889,25 @@ body[data-state="running"] .viewport {
 .sign-hero+.speller {
   margin-top:0
 }
+.record-panel {
+  padding:14px;
+  border:1px solid var(--hairline);
+  border-radius:10px;
+  background:var(--surface-2)
+}
+.record-panel h2 { margin:0 0 10px; font-size:15px }
+.record-panel label { display:block; margin-bottom:5px; color:var(--muted); font-size:12px }
+.record-panel select {
+  width:100%; min-height:40px; padding:7px 10px; border:1px solid var(--line); border-radius:8px;
+  background:var(--control); color:var(--text)
+}
+.record-actions { display:flex; gap:7px; flex-wrap:wrap; margin-top:10px }
+.record-actions .btn { flex:1 }
+.record-actions kbd { margin-left:4px }
+.record-count { margin:12px 0 3px; font-weight:650 }
+.record-status { margin:3px 0; color:var(--accent); font-weight:650 }
+.record-privacy { margin:9px 0 0; color:var(--muted); font-size:11px }
+.panel[data-sign="record"] .ring { border-color:var(--accent) }
 /* Dialog and status bar */
 .dialog {
   width:min(480px,calc(100% - 32px));
@@ -1337,6 +1356,8 @@ input[type="range"] {
   .speller {
     padding:12px
   }
+  .record-panel { padding:12px }
+  .record-actions .btn { flex:1 1 38% }
   .speller-actions .btn {
     flex:1
   }

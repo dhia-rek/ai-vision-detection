@@ -195,3 +195,22 @@ def test_javascript_uses_client_side_overlay_and_large_palette():
     palette = re.search(r"\bPALETTE\s*=\s*\[(.*?)\]", js, flags=re.DOTALL)
     assert palette
     assert len(re.findall(r"#[0-9a-fA-F]{6}", palette.group(1))) >= 8
+
+
+def test_record_mode_controls_and_privacy_contract():
+    html = INDEX_PATH.read_text()
+    js = JS_PATH.read_text()
+    assert 'data-sign="record"' in html
+    controls = (
+        "recordLetter",
+        "recordToggle",
+        "recordCounts",
+        "recordStatus",
+        "downloadRecord",
+        "clearRecord",
+    )
+    for element_id in controls:
+        assert f'id="{element_id}"' in html
+    assert "localStorage" in js and "avd.recordings.v1" in js
+    assert "hand landmarks only, no images" in js
+    assert "state.sign === 'record' ? 'spell'" in js
