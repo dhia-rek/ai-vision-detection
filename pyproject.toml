@@ -26,6 +26,7 @@ dev = [
     "ruff>=0.13",
     "mypy>=2.4.0",
     "interrogate>=1.7.0",
+    "playwright>=1.55",
 ]
 
 [tool.uv]
@@ -49,7 +50,10 @@ explicit = true
 [tool.pytest.ini_options]
 pythonpath = ["backend"]
 testpaths = ["tests"]
-markers = ["slow: runs real models (downloads them on first run)"]
+markers = [
+    "slow: runs real models (downloads them on first run)",
+    "browser: drives headless Chromium against the built static site",
+]
 
 [tool.ruff]
 line-length = 110

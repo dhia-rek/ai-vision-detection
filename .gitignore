@@ -13,3 +13,5 @@ runs/
 
 # model weights are downloaded on first run (app/zoo.py)
 *.pt
+backend/static/vendor/
+dist/

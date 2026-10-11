@@ -1,6 +1,6 @@
 """Shared detection types, the YOLO object detector and drawing helpers.
 
-`YoloDetector` wraps Ultralytics YOLOv8. `StubDetector` returns fixed boxes and
+`YoloDetector` wraps an Ultralytics YOLO detector. `StubDetector` returns fixed boxes and
 never imports torch, so tests and smoke checks run in seconds without weights.
 Face and sign analyzers (faces.py, sign.py) return the same `Detection` type.
 """
@@ -65,7 +65,7 @@ class Detector(Protocol):
 
 
 class YoloDetector:
-    """Ultralytics YOLOv8 detector (COCO, 80 classes)."""
+    """Ultralytics YOLO detector (COCO, 80 classes)."""
 
     def __init__(self, weights: str | Path, conf: float = 0.25, device: str = "cpu") -> None:
         """Load YOLO weights.

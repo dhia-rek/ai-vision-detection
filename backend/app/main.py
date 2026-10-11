@@ -3,13 +3,13 @@
 Serves images, uploaded videos and live webcam frames.
 
 Modes (query parameter `mode`):
-  objects  YOLOv8n, 80 COCO classes
+  objects  YOLO11n, 80 COCO classes
   faces    YuNet face detector + MobileFaceNet expression classifier (7 expressions)
   sign     MediaPipe hand landmarks; `sign_mode=spell` (ASL letters) or `gestures`
 
 Environment variables:
   AVD_DETECTOR       "real" (default) or "stub" (no models, for tests/smoke)
-  AVD_WEIGHTS        YOLO weights path (default: downloaded yolov8n.pt, see zoo.py)
+  AVD_WEIGHTS        YOLO weights path (default: downloaded yolo11n.pt, see zoo.py)
   AVD_MODEL_DIR      where downloaded models are cached
   AVD_CONF           YOLO confidence threshold (default 0.25)
   AVD_MAX_UPLOAD_MB  image upload limit in MB (default 10)
@@ -36,6 +36,7 @@ from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
+from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
 from .detector import Detector, StubDetector, YoloDetector, annotate, decode_image, encode_jpeg
@@ -44,11 +45,12 @@ from .sign import SIGN_MODES
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 STATIC_DIR = BACKEND_DIR / "static"
 SAMPLES_DIR = BACKEND_DIR / "samples"
+ASL_WEB_MODEL = BACKEND_DIR / "app/models/asl_letters_web.json"
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 VIDEO_SUFFIXES = {".mp4", ".webm", ".mov"}
 
 MODES = {
-    "objects": "Object detection (YOLOv8n, 80 COCO classes)",
+    "objects": "Object detection (YOLO11n, 80 COCO classes)",
     "faces": "Facial expression (angry, disgust, fear, happy, neutral, sad, surprised)",
     "sign": "ASL fingerspelling letters (sign_mode=spell) or common hand gestures (sign_mode=gestures)",
 }
@@ -94,9 +96,9 @@ def build_detector(key: str = "objects") -> Detector:
     if os.getenv("AVD_DETECTOR", "real").lower() == "stub":
         return StubDetector()
     if key == "objects":
-        from .zoo import ensure_model
+        from .zoo import DEFAULT_OBJECT_MODEL, ensure_model
 
-        weights = os.getenv("AVD_WEIGHTS") or ensure_model("yolov8n.pt")
+        weights = os.getenv("AVD_WEIGHTS") or ensure_model(DEFAULT_OBJECT_MODEL)
         return YoloDetector(weights, conf=float(os.getenv("AVD_CONF", "0.25")))
     if key == "faces":
         from .faces import ExpressionDetector
@@ -197,27 +199,38 @@ def create_app(detector: Detector | None = None) -> FastAPI:
             raise HTTPException(status_code=413, detail="Image too large")
         return decode_checked(raw)
 
-    def analyze(img: np.ndarray, key: str) -> dict:
+    def analyze(img: np.ndarray, key: str, annotate_image: bool = True) -> dict:
         """Run a mode on an image and build the ``/api/analyze`` response body.
 
+        Args:
+            img: BGR image.
+            key: Detector key from ``mode_key``.
+            annotate_image: If False, skip drawing and encoding the annotated JPEG and leave
+                ``result_image`` out (clients that draw the boxes themselves).
+
         Returns:
-            Dict with the annotated image as a base64 JPEG data URL, the detections,
-            their count, the model name and inference time in milliseconds.
+            Dict with the annotated image as a base64 JPEG data URL (unless skipped), the
+            detections, their count, the analysed image size in pixels (the coordinate space
+            of the boxes), the model name, the device and inference time in milliseconds.
         """
         det = get_detector(key)
         t0 = time.perf_counter()
         detections = det.detect(img)
         ms = (time.perf_counter() - t0) * 1000
-        jpeg = encode_jpeg(annotate(img, detections), quality=RESULT_JPEG_QUALITY)
-        return {
+        result = {
             "mode": key,
-            # Inline data URL: uploads and results are never written to disk.
-            "result_image": "data:image/jpeg;base64," + base64.b64encode(jpeg).decode(),
             "detections": [d.to_dict() for d in detections],
             "total_detections": len(detections),
+            "image_size": {"width": img.shape[1], "height": img.shape[0]},
             "model_used": det.name,
+            "device": getattr(det, "device", "cpu"),
             "inference_ms": round(ms, 1),
         }
+        if annotate_image:
+            jpeg = encode_jpeg(annotate(img, detections), quality=RESULT_JPEG_QUALITY)
+            # Inline data URL: uploads and results are never written to disk.
+            result["result_image"] = "data:image/jpeg;base64," + base64.b64encode(jpeg).decode()
+        return result
 
     def analyze_frame(img: np.ndarray, key: str, quality: int) -> Response:
         """Run a mode on a webcam frame and return the annotated JPEG.
@@ -253,7 +266,8 @@ def create_app(detector: Detector | None = None) -> FastAPI:
 
         Every ``round(source_fps / fps)``-th frame is analysed (at least every frame),
         stopping after ``max_seconds`` of video or ``MAX_VIDEO_FRAMES`` analysed frames.
-        In "sign-spell" mode the most confident hand per frame feeds a ``WordBuilder``
+        In "sign-spell" mode the most confident hand per frame (letter probabilities smoothed by a
+        ``LetterSmoother``) feeds a ``WordBuilder``
         and the typed text is included.
 
         Args:
@@ -278,9 +292,10 @@ def create_app(detector: Detector | None = None) -> FastAPI:
             det = get_detector(key)
             builder = None
             if key == "sign-spell":
-                from .sign import WordBuilder
+                from .sign import LetterSmoother, WordBuilder
 
                 builder = WordBuilder()
+                smoother = LetterSmoother()
             frames: list[dict] = []
             counts: Counter[str] = Counter()
             total_ms, idx = 0.0, 0
@@ -301,7 +316,8 @@ def create_app(detector: Detector | None = None) -> FastAPI:
                     counts.update(d.label for d in dets)
                     if builder is not None:
                         best = max(dets, key=lambda d: d.confidence, default=None)
-                        builder.feed(best.label if best else None, best.confidence if best else 0.0, t)
+                        letter, conf = smoother.feed(best.extra.get("scores") if best else None, t)
+                        builder.feed(letter, conf, t)
                     # Per-frame output stays small: no hand keypoints, no top-3.
                     brief = [
                         {"class": d.label, "confidence": round(d.confidence, 4), "bbox": d.to_dict()["bbox"]}
@@ -326,6 +342,9 @@ def create_app(detector: Detector | None = None) -> FastAPI:
             result["text"] = builder.text.strip()
         return result
 
+    # CSS and JS of the web UI (index.html references /static/app.css and /static/app.js).
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
     @app.get("/", include_in_schema=False)
     def root() -> FileResponse:
         """Serve the single-page web UI."""
@@ -335,6 +354,15 @@ def create_app(detector: Detector | None = None) -> FastAPI:
     def health() -> dict:
         """Liveness probe."""
         return {"status": "ok"}
+
+    @app.get("/api/models/asl-letters-web", include_in_schema=False)
+    def asl_web_model() -> FileResponse:
+        """Serve the versioned ASL MLP export for opt-in browser inference."""
+        return FileResponse(
+            ASL_WEB_MODEL,
+            media_type="application/json",
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
 
     @app.get("/api/modes")
     def modes() -> dict:
@@ -350,12 +378,19 @@ def create_app(detector: Detector | None = None) -> FastAPI:
 
     @app.post("/api/analyze")
     async def api_analyze(
-        file: UploadFile = File(...), mode: str = Query("objects"), sign_mode: str = Query("spell")
+        file: UploadFile = File(...),
+        mode: str = Query("objects"),
+        sign_mode: str = Query("spell"),
+        annotate: bool = Query(True),
     ):
-        """Image in; JSON detections plus an annotated JPEG (data URL) out."""
+        """Image in; JSON detections plus an annotated JPEG (data URL) out.
+
+        Pass ``annotate=false`` to get the JSON only (no ``result_image``), which is faster
+        and what the web UI uses: it draws the boxes itself from ``detections``.
+        """
         key = mode_key(mode, sign_mode)
         img = await read_image(file)
-        return await run_in_threadpool(analyze, img, key)
+        return await run_in_threadpool(analyze, img, key, annotate)
 
     @app.post("/api/frame")
     async def api_frame(
@@ -400,7 +435,7 @@ def create_app(detector: Detector | None = None) -> FastAPI:
     @app.post("/detect/")
     async def detect(file: UploadFile = File(...)) -> dict:
         """Legacy alias of ``/api/analyze`` fixed to object detection."""
-        return await api_analyze(file, "objects", "spell")
+        return await api_analyze(file, "objects", "spell", True)
 
     @app.post("/detect/frame")
     async def detect_frame(frame: UploadFile = File(...), quality: int = Query(80, ge=10, le=95)) -> Response:
@@ -427,13 +462,18 @@ def create_app(detector: Detector | None = None) -> FastAPI:
         return FileResponse(SAMPLES_DIR / group / name)
 
     @app.post("/demo/analyze/{group}/{name}")
-    async def demo_analyze(group: str, name: str, mode: str | None = None, sign_mode: str = "spell"):
-        """Run a mode on a bundled sample image: no camera or upload needed."""
+    async def demo_analyze(
+        group: str, name: str, mode: str | None = None, sign_mode: str = "spell", annotate: bool = True
+    ):
+        """Run a mode on a bundled sample image: no camera or upload needed.
+
+        ``annotate=false`` omits the annotated image, as in ``/api/analyze``.
+        """
         if group == "video" or name not in list_samples(group):
             raise HTTPException(status_code=404, detail="Unknown sample")
         key = mode_key(mode or group, sign_mode)
         img = decode_checked((SAMPLES_DIR / group / name).read_bytes())
-        return await run_in_threadpool(analyze, img, key)
+        return await run_in_threadpool(analyze, img, key, annotate)
 
     return app
 
