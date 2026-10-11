@@ -1,6 +1,6 @@
 """Assemble the static site exactly as it is published, and optionally serve it for local checks.
 
-Layout (mountable at any sub-path, e.g. ``/vision/``, because every URL is relative)::
+Layout (mountable at any sub-path, e.g. ``/ai-vision-detection/``, because every URL is relative)::
 
     <out>/index.html
     <out>/static/...     app.css, app.js, js/, models/, vendor/, fonts/, asl/

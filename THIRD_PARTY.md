@@ -13,6 +13,7 @@
 | Lexend, Figtree, JetBrains Mono | | SIL OFL 1.1 | `backend/static/fonts/` | Google Fonts |
 | Lucide icons | | ISC | inline SVG sprite in `backend/static/index.html` | https://lucide.dev |
 | Sample images | | CC0 / credits in `backend/samples/CREDITS.md` | `backend/samples/` | |
+| Preview clips | | Recorded from this app on the sample images above (same licences) | `backend/static/previews/` | `scripts/record_previews.py` |
 
 **YOLO11 and the AGPL.** Ultralytics YOLO11 weights and exports are AGPL-3.0. This repository does not use an
 Ultralytics enterprise licence, so everything that serves the model, including this app's source, must stay public

@@ -2,7 +2,7 @@
 
 The static experience is vanilla JavaScript ES modules. `../app.js` is the entry point. Every asset and model URL is
 resolved relative to its importing module (`new URL(..., import.meta.url)`), so the built artifact can be mounted at
-`/vision/` or any other sub-path. Live inference runs on the device; nothing here calls the Python API.
+`/ai-vision-detection/` or any other sub-path. Live inference runs on the device; nothing here calls the Python API.
 
 | Module | Role |
 | --- | --- |

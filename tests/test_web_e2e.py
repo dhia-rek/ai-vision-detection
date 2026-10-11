@@ -37,7 +37,7 @@ MODES = {
         "objects/street.jpg",
         r"yolo11n-(320|640)",
         YOLO,
-        "parseInt(document.querySelector('#objCount').textContent) >= 1",
+        "document.querySelectorAll('#objBars li').length >= 1",
     ),
     "faces": (
         "?mode=faces",

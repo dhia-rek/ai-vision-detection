@@ -11,6 +11,7 @@ JS_DIR = STATIC_DIR / "js"
 EMOJI_RANGES = ((0x1F300, 0x1FAFF), (0x2600, 0x27BF), (0x1F000, 0x1F2FF), (0xFE0F, 0xFE0F))
 ALLOWED_URLS = {
     "https://github.com/dhia-rek/ai-vision-detection",
+    "https://github.com/dhia-rek/ai-vision-detection/blob/main/docs/architecture.md",
     "https://lucide.dev",
     "https://dhiarekik.me",
     "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task",
