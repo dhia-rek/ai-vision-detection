@@ -142,9 +142,8 @@
 </header>
 
 <section class="intro" id="intro" aria-labelledby="introTitle">
-  <p class="intro-eyebrow">Computer vision &middot; Case study</p>
-  <h1 class="intro-title" id="introTitle">Teaching a browser to see</h1>
-  <p class="intro-sub">Three vision models running live on your camera, entirely inside this page. No server, no upload.</p>
+  <h1 class="intro-title" id="introTitle">AI Vision Detection</h1>
+  <p class="intro-sub">Object detection, facial expressions and ASL letters, live on your camera. Everything runs in this page; nothing is uploaded.</p>
 </section>
 
 <main class="app" id="app">
@@ -389,34 +388,29 @@
 <!-- The case study: how the project got here, in four short chapters. Hidden in embed mode. -->
 <article class="story" id="story" aria-labelledby="storyTitle">
   <header class="story-head">
-    <p class="intro-eyebrow">The story</p>
-    <h2 class="story-title" id="storyTitle">How it was built</h2>
+    <h2 class="story-title" id="storyTitle">How I built it</h2>
   </header>
 
   <ol class="chapters">
     <li class="chapter">
-      <span class="chapter-num">01</span>
-      <h3>One camera, three ways to see</h3>
-      <p>Objects for the everyday world, expressions for faces, and ASL fingerspelling for people who sign instead of speak. Each mode is its own model, one tap away.</p>
+      <h3>Three modes</h3>
+      <p>Everyday objects, facial expressions, and ASL fingerspelling for people who sign. Each mode uses its own model, and you switch with one tap.</p>
       <p class="chapter-metric"><b>3</b> models, <b>1</b> camera</p>
     </li>
     <li class="chapter">
-      <span class="chapter-num">02</span>
-      <h3>Teaching it the alphabet</h3>
+      <h3>Better letter recognition</h3>
       <p>The first letter model was right 47% of the time on photos it had never seen. I rebuilt the hand features, retrained on open datasets and tested on a separate collection.</p>
       <p class="chapter-metric"><b>47% &rarr; 76%</b> letter accuracy</p>
     </li>
     <li class="chapter">
-      <span class="chapter-num">03</span>
-      <h3>Moving it into your browser</h3>
+      <h3>Running in the browser</h3>
       <p>It started as a Python server that received camera frames. I exported every model to run in the page with ONNX Runtime Web and MediaPipe, so frames never leave the device and hosting is free. Tests check that the browser gives the same answers as Python.</p>
       <p class="chapter-metric"><b>22 / 22</b> parity tests</p>
     </li>
     <li class="chapter">
-      <span class="chapter-num">04</span>
-      <h3>What is still hard</h3>
+      <h3>Known limits</h3>
       <p>Reading emotion from a face is the weakest part: 25% on 700 real-world photos, where chance is 14%. Treat it as a rough guess. Letters J and Z need motion, which one frame cannot show.</p>
-      <p class="chapter-metric"><b>Honest</b> numbers, measured</p>
+      <p class="chapter-metric"><b>25%</b> on expressions</p>
     </li>
   </ol>
 
