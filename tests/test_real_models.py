@@ -54,12 +54,16 @@ def faces_det(_real_detector_env):
 
 @pytest.fixture(scope="session")
 def spell_det(_real_detector_env):
-    return build_or_skip("sign-spell")
+    det = build_or_skip("sign-spell")
+    yield det
+    det.recognizer.close()  # close before interpreter shutdown, or MediaPipe logs a TypeError
 
 
 @pytest.fixture(scope="session")
 def gestures_det(_real_detector_env):
-    return build_or_skip("sign-gestures")
+    det = build_or_skip("sign-gestures")
+    yield det
+    det.recognizer.close()  # close before interpreter shutdown, or MediaPipe logs a TypeError
 
 
 def load(path: Path):
@@ -149,30 +153,6 @@ def real_client(spell_det, faces_det, _real_detector_env):
         yield TestClient(app)
     finally:
         main.build_detector = original
-
-
-def test_video_fingerspelling_cab(real_client):
-    data = (SAMPLES / "video" / "fingerspelling_cab.mp4").read_bytes()
-    r = real_client.post(
-        "/api/video",
-        params={"mode": "sign", "sign_mode": "spell", "fps": 5},
-        files={"file": ("cab.mp4", data, "video/mp4")},
-    )
-    assert r.status_code == 200, r.text
-    body = r.json()
-    assert body["text"] == "CAB", body["label_counts"]
-    assert body["processed_frames"] > 0
-
-
-def test_video_faces_happy(real_client):
-    data = (SAMPLES / "video" / "faces.mp4").read_bytes()
-    r = real_client.post(
-        "/api/video",
-        params={"mode": "faces", "fps": 5},
-        files={"file": ("faces.mp4", data, "video/mp4")},
-    )
-    assert r.status_code == 200, r.text
-    assert "happy" in r.json()["label_counts"]
 
 
 def test_api_faces_end_to_end(real_client):

@@ -48,8 +48,8 @@ uv run python scripts/build_pages_artifact.py --out dist/site --serve 8013
 
 ## Docker (Python API, optional)
 
-The `Dockerfile` packages the FastAPI app: the same static page plus the Python API (`/api/analyze`, `/api/frame`,
-`/api/video`) used for evaluation and local tools. It is not needed for the live site.
+The `Dockerfile` packages the FastAPI app: the same static page plus the Python image API (`POST /api/analyze`,
+`GET /api/modes`, `GET /health`) used for evaluation and local tools. It is not needed for the live site.
 
 ```bash
 docker build -t ai-vision-detection .

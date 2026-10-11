@@ -32,20 +32,6 @@ def client() -> TestClient:
     return TestClient(create_app(detector=StubDetector()))
 
 
-@pytest.fixture
-def avi_bytes(tmp_path) -> bytes:
-    """A tiny 10-frame MJPG .avi (10 fps, 64x48)."""
-    path = tmp_path / "tiny.avi"
-    writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"MJPG"), 10.0, (64, 48))
-    assert writer.isOpened()
-    for i in range(10):
-        writer.write(np.full((48, 64, 3), i * 20, dtype=np.uint8))
-    writer.release()
-    data = path.read_bytes()
-    assert data
-    return data
-
-
 @pytest.fixture(scope="session")
 def static_site(tmp_path_factory):
     """Base URL of the built static site (``scripts/build_pages_artifact.py`` layout), served locally."""

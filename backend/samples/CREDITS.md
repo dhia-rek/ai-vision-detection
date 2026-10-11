@@ -23,12 +23,3 @@ sources, authors and licences (CC0, public domain) are listed in
 Same files as in `tests/fixtures/sign/`: letter photos from the Hugging Face dataset
 EitanG98/asl_letters (Unlicense) and gesture photos from Wikimedia Commons (CC0 / public
 domain). Hands only. Sources per file: [tests/fixtures/sign/README.md](../../tests/fixtures/sign/README.md).
-
-## video/
-
-Slideshow clips generated from the still photos above (not real recordings), H.264:
-
-| File | Built from |
-| --- | --- |
-| `fingerspelling_cab.mp4` | `letter_C`, `letter_A`, `letter_B` (1.5 s each) then 2 s blank |
-| `faces.mp4` | `happy`, `angry`, `neutral` (2 s each, 640x480 letterboxed) |
