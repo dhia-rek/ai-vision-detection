@@ -44,8 +44,7 @@ Format `dhia-asl-mlp`, `format_version: 1`:
   test checks that this does not change outputs materially.
 
 The browser loads the copy in `backend/static/models/asl_letters_web.json`; `backend/static/js/web-asl.js` ports the
-v3 feature transform and inference, checked against NumPy by `tests/test_web_asl_parity.py`. The API also serves the
-export at `GET /api/models/asl-letters-web`.
+v3 feature transform and inference, checked against NumPy by `tests/test_web_asl_parity.py`.
 
 ## Static browser app: `export_web_models.py`, `build_pages_artifact.py`, `web_bench.py`
 
