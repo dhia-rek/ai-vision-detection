@@ -2243,13 +2243,6 @@ html[data-theme="dark"] .try-ref img {
   width: min(100% - 48px, 1560px);
   margin: 30px auto 0;
 }
-.intro-eyebrow {
-  margin: 0;
-  color: var(--accent-text);
-  font: 500 12px/1.4 var(--font-mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
 .intro-title {
   margin: 6px 0 0;
   color: var(--ink);
@@ -2338,10 +2331,6 @@ body:not([data-camera="live"]):not([data-camera="paused"]) .statusbar {
   border: 1px solid var(--border);
   border-radius: 18px;
   background: var(--bg-elev);
-}
-.chapter-num {
-  color: var(--accent-text);
-  font: 500 13px/1 var(--font-mono);
 }
 .chapter h3 {
   margin: 12px 0 0;

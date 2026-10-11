@@ -46,7 +46,7 @@ give the same answers. Full picture with a diagram: **[docs/architecture.md](doc
 - **Downloads on demand:** a mode's model loads the first time you open it (5 to 20 MB) and is cached for later visits.
 - **Static hosting:** the site is plain files on GitHub Pages ([DEPLOY.md](DEPLOY.md)).
 
-## Run it locally
+## Run it
 
 ```bash
 uv sync
@@ -58,7 +58,7 @@ uv run python scripts/build_pages_artifact.py --out dist/site --serve 8013
 Tests: `uv run pytest -q` runs everything, including the Chromium parity and end-to-end suites
 (`uv run playwright install chromium` and `ffmpeg` needed). Training and evaluation: [scripts/README.md](scripts/README.md).
 
-## Repository
+## Project layout
 
 | Path | What |
 | --- | --- |
