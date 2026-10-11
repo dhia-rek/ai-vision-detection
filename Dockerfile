@@ -1,5 +1,5 @@
-# Demo image (also the Hugging Face Spaces Docker image): FastAPI + static UI,
-# CPU only. Pretrained models are downloaded at build time (not in the repo).
+# Python reference API: FastAPI + the static page, CPU only. The live site does not need it (see DEPLOY.md).
+# Pretrained models are downloaded at build time (not in the repo).
 FROM python:3.12-slim
 COPY --from=ghcr.io/astral-sh/uv:0.12 /uv /usr/local/bin/uv
 
