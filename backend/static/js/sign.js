@@ -4,7 +4,6 @@ import { state, on } from './store.js';
 import { ASL_LETTERS, ASL_IMG, MOTION_LETTERS, EXPRESSIONS, SIGN_COLOR } from './config.js';
 import { registerMode } from './modes.js';
 import { announce } from './insights.js';
-import { toast } from './toast.js';
 
 const ringCircumference = 2 * Math.PI * 52;
 let tryTarget = 'B', streak = 0, solved = new Set(), holdSince = null, successTimer = 0, trySucceeded = false;
@@ -58,7 +57,7 @@ function resetTryProgress() {
   $('tryHint').textContent = idleHint();
 }
 function idleHint() {
-  return state.camera === 'live' || state.camera === 'paused' ? 'Copy the hand shape and hold it for a moment.' : 'Start the camera to play.';
+  return state.camera === 'live' || state.camera === 'paused' ? 'Copy the hand shape and hold it.' : 'Start the camera to play.';
 }
 function setTarget(letter) {
   if (!tryPool.includes(letter)) return;
@@ -79,11 +78,10 @@ function succeed() {
   trySucceeded = true;
   $('tryCard').dataset.state = 'success';
   $('tryBar').style.setProperty('--p', '1');
-  $('trySuccessText').textContent = `That is ${tryTarget}! Nice.`;
+  $('trySuccessText').textContent = `Correct: ${tryTarget}`;
   $('trySuccess').hidden = false;
   solved.add(tryTarget); streak++;
   countUp($('tryStreakN'), streak, { duration: 350 });
-  toast(`That is ${tryTarget}! Nice.`, { kind: 'success' });
   renderChart();
   successTimer = setTimeout(chooseNext, 2200);
 }
@@ -146,7 +144,7 @@ function wireBuilder() {
 
 registerMode({
   id: 'sign', order: 3, title: 'Sign language', sub: (s) => s.sign === 'spell' ? 'ASL fingerspelling, letters A to Z' : 'Seven static hand gestures',
-  empty: 'Reads ASL fingerspelling and hand gestures, letter by letter, and spells words.', panel: 'insightSign',
+  empty: 'Spells words from ASL hand signs.', panel: 'insightSign',
   onEnter() { resetSpell(); }, onLeave() { resetTryProgress(); },
   onReset() { resetSpell(); builder.clear(); },
   onResult(dets) {

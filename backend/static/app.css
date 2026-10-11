@@ -183,12 +183,6 @@ svg {
   font: 600 20px/1.1 var(--font-head);
   letter-spacing: -0.035em;
 }
-.brand-sub {
-  margin-top: 5px;
-  color: var(--muted);
-  font-size: 12px;
-  letter-spacing: 0.01em;
-}
 .segmented {
   display: flex;
   align-items: center;
@@ -1472,11 +1466,6 @@ body[data-media="none"] .toolbar {
   font-size: 12px;
   line-height: 1.4;
 }
-.privacy .icon {
-  width: 12px;
-  margin-right: 4px;
-  color: var(--accent-text);
-}
 .privacy a {
   margin-left: 4px;
   font-weight: 650;
@@ -2247,4 +2236,8 @@ html[data-theme="dark"] .try-ref img {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+#hiddenNote:empty {
+  display: none;
 }

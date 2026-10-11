@@ -107,7 +107,6 @@
   <a class="brand" href="/" aria-label="Vision, home">
     <span class="brand-text">
       <span class="brand-name">Vision</span>
-      <span class="brand-sub">Objects &middot; Expressions &middot; Sign language</span>
     </span>
   </a>
 
@@ -161,14 +160,14 @@
 
       <!-- Camera off: what this mode does, and the one big call to action. -->
       <div class="empty" id="empty">
-        <h2 class="empty-title" id="emptyTitle">See what the model sees</h2>
-        <p class="empty-text" id="emptyText">Finds and labels everyday objects with a box and a confidence score.</p>
+        <h2 class="empty-title" id="emptyTitle">Objects</h2>
+        <p class="empty-text" id="emptyText">Detects 80 kinds of everyday objects.</p>
         <div class="empty-actions">
           <button type="button" class="btn btn-primary btn-lg" id="startBtn">
             <span>Start camera</span>
           </button>
         </div>
-        <p class="empty-note">Your browser asks for camera access. Frames stay on this device, and you can stop at any time.</p>
+        <p class="empty-note">Runs in your browser. Nothing is uploaded.</p>
       </div>
 
       <!--
@@ -267,7 +266,7 @@
             <output class="filter-value" id="minConfOut" for="minConf">35%</output>
           </div>
           <input type="range" id="minConf" class="range" min="0" max="95" step="5" value="35" aria-describedby="hiddenNote">
-          <p class="filter-note" id="hiddenNote">Showing everything above 35%.</p>
+          <p class="filter-note" id="hiddenNote"></p>
           <div class="chips" id="classChips" role="group" aria-label="Show or hide classes"></div>
         </div>
 
@@ -301,7 +300,7 @@
           <div class="try-body">
             <p class="eyebrow">Challenge</p>
             <h2 class="try-title" id="tryTitle">Try: <span class="try-letter" id="tryLetter">B</span></h2>
-            <p class="try-hint" id="tryHint">Copy the hand shape and hold it for a moment.</p>
+            <p class="try-hint" id="tryHint">Copy the hand shape and hold it.</p>
             <div class="try-progress" role="presentation"><span class="try-bar" id="tryBar"></span></div>
             <div class="try-actions">
               <button type="button" class="btn btn-sm" id="tryNext"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg><span>New letter</span></button>
@@ -339,7 +338,7 @@
           <p class="chart-credit">Hand shapes: wpclipart.com via Wikimedia Commons, public domain. J and Z are drawn with their motion.</p>
         </details>
 
-        <p class="none" id="signMotionNote">Letters are read from a single frame. J and Z need motion and are unreliable.</p>
+        <p class="none" id="signMotionNote">J and Z need motion, so they are less reliable.</p>
       </div>
 
       <!--
@@ -379,7 +378,6 @@
     </li>
   </ul>
   <p class="privacy">
-    Camera frames stay on your device. Nothing is uploaded or saved. Expression output is a guess about a face, not a judgement about a person.
     <a href="https://github.com/dhia-rek/ai-vision-detection" rel="noopener">Source</a>
   </p>
 </footer>
