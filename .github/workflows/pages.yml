@@ -1,0 +1,66 @@
+name: Static site (GitHub Pages)
+
+# Builds the browser-only app and, on main, publishes it with GitHub Pages. Because dhia-rek.github.io has the
+# custom domain dhiarekik.me, this project site is served at https://dhiarekik.me/ai-vision-detection/.
+# Pull requests only build and check the site.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build-artifact:
+    name: Build and upload the static app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Cache pretrained models (gesture task)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ai-vision-detection/models
+          key: models-${{ hashFiles('backend/app/zoo.py') }}
+      - name: Fetch pinned runtimes (ONNX Runtime Web, MediaPipe) and verify their checksums
+        run: uv run --no-project python scripts/export_web_models.py --only vendor
+      - name: Assemble the artifact (index.html + static/, relative URLs only)
+        run: uv run --no-project python scripts/build_pages_artifact.py --out artifact
+      - name: Sanity-check the artifact
+        run: |
+          set -euo pipefail
+          test -f artifact/index.html
+          test -f artifact/static/models/objects/yolo11n.onnx
+          test -f artifact/static/vendor/ort/ort.wasm.min.mjs
+          test -f artifact/static/previews/objects.mp4
+          # Every asset URL must be relative so the app can live under any sub-path.
+          ! grep -nE '(src|href)="/[^"]' artifact/index.html
+          du -sh artifact
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: artifact/
+
+  deploy:
+    name: Publish to GitHub Pages
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build-artifact
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
