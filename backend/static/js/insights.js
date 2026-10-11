@@ -1,7 +1,7 @@
 /** Objects and facial-expression panels plus their mode registrations. */
 import { state, emit, on } from './store.js';
 import { registerMode } from './modes.js';
-import { $, h, countUp, hash, pct } from './util.js';
+import { $, h, hash, pct } from './util.js';
 import { PALETTE, EMOTION_COLORS, EXPRESSIONS, MAX_FACES } from './config.js';
 import { visibleDets, hiddenCount, requestDraw } from './overlay.js';
 
@@ -24,7 +24,6 @@ function renderObjects(dets) {
     if (list.children[i] !== li) list.insertBefore(li, list.children[i] || null);
   });
   existing.forEach((li) => li.remove());
-  countUp($('objCount'), visible.length); countUp($('objClasses'), rows.length);
   const all = $('classChips'), old = new Map([...all.querySelectorAll('button[data-class]')].map((b) => [b.dataset.class, b]));
   const allButton = all.querySelector('.chip-all') || makeAllChip();
   all.prepend(allButton); allButton.setAttribute('aria-pressed', String(state.hiddenClasses.size === 0));
@@ -42,8 +41,6 @@ function renderObjects(dets) {
   }
   old.forEach((b) => b.remove());
   const conf = Math.round(state.minConf * 100), hidden = hiddenCount(dets);
-  const average = visible.length ? visible.reduce((sum, d) => sum + (Number(d.confidence) || 0), 0) / visible.length : null;
-  if (average == null) $('objConf').textContent = '–'; else countUp($('objConf'), Math.round(average * 100), { suffix: '%' });
   $('minConf').value = String(conf); $('minConfOut').textContent = `${conf}%`;
   $('minConf').style.setProperty('--range-progress', `${(conf / 95) * 100}%`);   // filled part of the slider track
   $('hiddenNote').textContent = hidden ? `${hidden} ${hidden === 1 ? "detection" : "detections"} hidden below ${conf}% or by filters.` : '';
@@ -97,7 +94,7 @@ export function announce(dets) {
   announceTimer = setTimeout(() => { lastSummary = summary; pendingSummary = null; $('liveSummary').textContent = summary; }, 900);
 }
 export function resetAnnounce() { clearTimeout(announceTimer); pendingSummary = null; lastSummary = ''; $('liveSummary').textContent = ''; }
-function resetObjects() { lastDets = []; $('objBars').replaceChildren(); $('classChips').replaceChildren(); $('objNone').classList.remove('hidden'); $('objNone').textContent = 'Nothing detected yet.'; countUp($('objCount'), 0); countUp($('objClasses'), 0); $('objConf').textContent = '–'; renderObjects([]); resetAnnounce(); }
+function resetObjects() { lastDets = []; $('objBars').replaceChildren(); $('classChips').replaceChildren(); $('objNone').classList.remove('hidden'); $('objNone').textContent = 'Nothing detected yet.'; renderObjects([]); resetAnnounce(); }
 function onObjects(dets) { lastDets = dets; renderObjects(dets); announce(dets); }
 function onFaces(dets) { lastDets = dets; renderFaces(dets); announce(dets); }
 on('filter', render);
