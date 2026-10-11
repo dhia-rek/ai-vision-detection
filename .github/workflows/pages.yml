@@ -1,7 +1,8 @@
-name: Static site artifact (not deployed)
+name: Static site (GitHub Pages)
 
-# Builds the browser-only app exactly as it will be mounted at /vision/ on dhiarekik.me and uploads it as
-# a workflow artifact. Nothing is published from here: a separate job places the artifact on the portfolio site.
+# Builds the browser-only app and, on main, publishes it with GitHub Pages. Because dhia-rek.github.io has the
+# custom domain dhiarekik.me, this project site is served at https://dhiarekik.me/ai-vision-detection/.
+# Pull requests only build and check the site.
 
 on:
   pull_request:
@@ -11,6 +12,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   build-artifact:
@@ -36,13 +41,26 @@ jobs:
           test -f artifact/index.html
           test -f artifact/static/models/objects/yolo11n.onnx
           test -f artifact/static/vendor/ort/ort.wasm.min.mjs
+          test -f artifact/static/previews/objects.mp4
           # Every asset URL must be relative so the app can live under any sub-path.
           ! grep -nE '(src|href)="/[^"]' artifact/index.html
           du -sh artifact
-      - name: Upload artifact (not deployed)
-        uses: actions/upload-artifact@v4
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: vision-static-site
           path: artifact/
-          if-no-files-found: error
-          retention-days: 14
+
+  deploy:
+    name: Publish to GitHub Pages
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build-artifact
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

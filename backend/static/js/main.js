@@ -42,6 +42,15 @@ function syncUrl() {
   if (state.mode === 'sign') params.set('sign_mode', state.sign); else params.delete('sign_mode');
   try { history.replaceState(null, '', `${location.pathname}?${params}${location.hash}`); } catch { /* Sandboxed frames may deny history access. */ }
 }
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+/** Show the recorded clip for the current mode while the camera is off (poster only with reduced motion). */
+function syncPreview() {
+  const preview = $('preview'), base = `static/previews/${state.mode}`;
+  if (!preview.getAttribute('src')?.startsWith(base)) { preview.poster = `${base}.jpg`; preview.src = `${base}.mp4`; }
+  const showing = !$('empty').classList.contains('hidden');
+  if (showing && !reducedMotion.matches) preview.play().catch(() => { /* Autoplay refused: the poster stays. */ });
+  else preview.pause();
+}
 function syncMode() {
   const mode = getMode(state.mode);
   if (!mode) return;
@@ -52,6 +61,7 @@ function syncMode() {
   $('panelSub').textContent = typeof mode.sub === 'function' ? mode.sub(state) : mode.sub;
   $('emptyTitle').textContent = mode.title;
   $('emptyText').textContent = mode.empty;
+  syncPreview();
   for (const item of modes) $(item.panel).classList.toggle('hidden', item.id !== mode.id);
   showPanel(mode.id);
   $('signSwitch').classList.toggle('hidden', state.mode !== 'sign');
@@ -74,7 +84,8 @@ function syncCamera(status) {
   // While flipping cameras the last frame stays up, so the empty card must not cover it.
   $('empty').classList.toggle('hidden', !(status === 'off' || (starting && document.body.dataset.media !== 'live')));
   $('startBtn').disabled = starting;
-  $('startBtn').querySelector('span').textContent = starting ? 'Starting camera' : 'Start camera';
+  $('startBtn').querySelector('span').textContent = starting ? 'Starting camera' : 'Try it with your camera';
+  syncPreview();
   const help = cameraCopy[status];
   $('camHelp').classList.toggle('hidden', !help);
   if (help) {

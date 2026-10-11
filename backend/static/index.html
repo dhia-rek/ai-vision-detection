@@ -141,11 +141,19 @@
   </div>
 </header>
 
+<section class="intro" id="intro" aria-labelledby="introTitle">
+  <p class="intro-eyebrow">Computer vision &middot; Case study</p>
+  <h1 class="intro-title" id="introTitle">Teaching a browser to see</h1>
+  <p class="intro-sub">Three vision models running live on your camera, entirely inside this page. No server, no upload.</p>
+</section>
+
 <main class="app" id="app">
   <section class="stage" aria-label="Live camera">
     <!-- --ar (camera aspect ratio, set from JS) makes the viewport hug the video: no letterbox bars. -->
     <div class="viewport" id="viewport" tabindex="0" aria-label="Live camera view. Press space to pause or resume.">
       <video id="video" playsinline muted autoplay></video>
+      <!-- Shown while the camera is off: a clip of this app on sample photos (scripts/record_previews.py); main.js sets the source per mode. -->
+      <video class="preview" id="preview" muted loop playsinline preload="auto" aria-hidden="true"></video>
       <div class="model-load hidden" id="modelLoad" role="status" aria-live="polite">
         <span class="model-load-spinner" aria-hidden="true"></span>
         <strong id="modelLoadTitle">Preparing model</strong>
@@ -160,11 +168,12 @@
 
       <!-- Camera off: what this mode does, and the one big call to action. -->
       <div class="empty" id="empty">
+        <span class="preview-tag">Preview &middot; recorded in this app</span>
         <h2 class="empty-title" id="emptyTitle">Objects</h2>
         <p class="empty-text" id="emptyText">Detects 80 kinds of everyday objects.</p>
         <div class="empty-actions">
           <button type="button" class="btn btn-primary btn-lg" id="startBtn">
-            <span>Start camera</span>
+            <span>Try it with your camera</span>
           </button>
         </div>
         <p class="empty-note">Runs in your browser. Nothing is uploaded.</p>
@@ -242,7 +251,7 @@
   <aside class="panel" id="panel" aria-label="Insights" data-view="objects">
     <header class="panel-head">
       <div class="panel-heading">
-        <h1 class="panel-title" id="panelTitle">Objects</h1>
+        <h2 class="panel-title" id="panelTitle">Objects</h2>
         <p class="panel-sub" id="panelSub">80 everyday object classes</p>
       </div>
       <div class="segmented segmented-small hidden" id="signSwitch" role="radiogroup" aria-label="Sign language mode">
@@ -254,11 +263,6 @@
     <div class="panel-body" id="panelBody">
       <!-- Each mode owns one .insight[data-panel]; the mode registry shows the active one. -->
       <div class="insight" id="insightObjects" data-panel="objects">
-        <div class="summary">
-          <div class="summary-item"><span class="summary-value" id="objCount">0</span><span class="summary-label">objects</span></div>
-          <div class="summary-item"><span class="summary-value" id="objClasses">0</span><span class="summary-label">classes</span></div>
-          <div class="summary-item"><span class="summary-value" id="objConf">&ndash;</span><span class="summary-label">avg confidence</span></div>
-        </div>
 
         <div class="filters">
           <div class="filter-row">
@@ -381,6 +385,60 @@
     <a href="https://github.com/dhia-rek/ai-vision-detection" rel="noopener">Source</a>
   </p>
 </footer>
+
+<!-- The case study: how the project got here, in four short chapters. Hidden in embed mode. -->
+<article class="story" id="story" aria-labelledby="storyTitle">
+  <header class="story-head">
+    <p class="intro-eyebrow">The story</p>
+    <h2 class="story-title" id="storyTitle">How it was built</h2>
+  </header>
+
+  <ol class="chapters">
+    <li class="chapter">
+      <span class="chapter-num">01</span>
+      <h3>One camera, three ways to see</h3>
+      <p>Objects for the everyday world, expressions for faces, and ASL fingerspelling for people who sign instead of speak. Each mode is its own model, one tap away.</p>
+      <p class="chapter-metric"><b>3</b> models, <b>1</b> camera</p>
+    </li>
+    <li class="chapter">
+      <span class="chapter-num">02</span>
+      <h3>Teaching it the alphabet</h3>
+      <p>The first letter model was right 47% of the time on photos it had never seen. I rebuilt the hand features, retrained on open datasets and tested on a separate collection.</p>
+      <p class="chapter-metric"><b>47% &rarr; 76%</b> letter accuracy</p>
+    </li>
+    <li class="chapter">
+      <span class="chapter-num">03</span>
+      <h3>Moving it into your browser</h3>
+      <p>It started as a Python server that received camera frames. I exported every model to run in the page with ONNX Runtime Web and MediaPipe, so frames never leave the device and hosting is free. Tests check that the browser gives the same answers as Python.</p>
+      <p class="chapter-metric"><b>22 / 22</b> parity tests</p>
+    </li>
+    <li class="chapter">
+      <span class="chapter-num">04</span>
+      <h3>What is still hard</h3>
+      <p>Reading emotion from a face is the weakest part: 25% on 700 real-world photos, where chance is 14%. Treat it as a rough guess. Letters J and Z need motion, which one frame cannot show.</p>
+      <p class="chapter-metric"><b>Honest</b> numbers, measured</p>
+    </li>
+  </ol>
+
+  <section class="hood" aria-labelledby="hoodTitle">
+    <h3 id="hoodTitle">Under the hood</h3>
+    <dl class="hood-grid">
+      <div><dt>Objects</dt><dd>YOLO11n, about 29 fps on a 6-core CPU, no GPU</dd></div>
+      <div><dt>Expressions</dt><dd>YuNet face finder + MobileFaceNet classifier</dd></div>
+      <div><dt>Sign language</dt><dd>MediaPipe hand landmarks + my letter classifier</dd></div>
+      <div><dt>In the browser</dt><dd>ONNX Runtime Web, Web Workers, WebGPU when available</dd></div>
+      <div><dt>Behind it</dt><dd>Python for training, evaluation and tests</dd></div>
+      <div><dt>Hosting</dt><dd>Static files on GitHub Pages, no server</dd></div>
+    </dl>
+    <p class="hood-links">
+      <a href="https://github.com/dhia-rek/ai-vision-detection" rel="noopener">Code on GitHub</a>
+      <a href="https://github.com/dhia-rek/ai-vision-detection/blob/main/docs/architecture.md" rel="noopener">Architecture</a>
+      <a href="https://dhiarekik.me" rel="noopener">More projects</a>
+    </p>
+  </section>
+
+  <p class="byline">Built by <a href="https://dhiarekik.me" rel="noopener">Dhia Rekik</a></p>
+</article>
 
 <div class="toasts" id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
 
