@@ -1,742 +1,467 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Vision Detection</title>
-<style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-
-        .container {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-width: 1100px;
-            width: 100%;
-            padding: 28px;
-            animation: slideUp 0.3s ease-out;
-        }
-
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(16px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        h1 {
-            text-align: center;
-            color: #333;
-            margin-bottom: 18px;
-            font-size: 26px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .top-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 18px;
-            margin-bottom: 18px;
-        }
-
-        @media (max-width: 900px) {
-            .top-row { grid-template-columns: 1fr; }
-        }
-
-        .panel {
-            border-radius: 12px;
-            border: 1px solid #e0e4ff;
-            background: #f8f9ff;
-            overflow: hidden;
-        }
-
-        .panel-header {
-            padding: 12px 14px;
-            background: #eef1ff;
-            color: #667eea;
-            font-weight: 700;
-            font-size: 14px;
-            border-bottom: 1px solid #e0e4ff;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-        }
-
-        .media {
-            width: 100%;
-            display: block;
-            background: #f0f2ff;
-            object-fit: contain;
-        }
-
-        .controls {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            justify-content: center;
-            margin: 14px 0;
-            flex-wrap: wrap;
-        }
-
-        button {
-            padding: 10px 16px;
-            border: none;
-            border-radius: 10px;
-            font-size: 14px;
-            font-weight: 700;
-            cursor: pointer;
-            transition: transform 0.15s ease;
-        }
-
-        button:active { transform: scale(0.98); }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .btn-primary:hover { box-shadow: 0 10px 20px rgba(102, 126, 234, 0.25); }
-
-        .btn-secondary {
-            background: #f3f4f6;
-            color: #667eea;
-            border: 2px solid #667eea;
-        }
-
-        .btn-secondary:hover {
-            background: #667eea;
-            color: white;
-        }
-
-        .status-bar {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-top: 12px;
-        }
-
-        @media (max-width: 900px) {
-            .status-bar { grid-template-columns: 1fr; }
-        }
-
-        .stat-card {
-            background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
-            padding: 14px;
-            border-radius: 12px;
-            border: 1px solid #e0e4ff;
-            text-align: center;
-        }
-
-        .stat-label {
-            font-size: 12px;
-            color: #999;
-            text-transform: uppercase;
-            letter-spacing: 0.6px;
-            margin-bottom: 6px;
-        }
-
-        .stat-value {
-            font-size: 28px;
-            font-weight: 800;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .error-message {
-            background: #fef2f2;
-            border: 1px solid #fecaca;
-            border-radius: 10px;
-            padding: 12px 14px;
-            color: #dc2626;
-            display: none;
-            margin-top: 12px;
-            font-weight: 600;
-        }
-
-        .error-message.show { display: block; }
-
-        .small {
-            font-size: 12px;
-            color: #666;
-            margin-top: 8px;
-            text-align: center;
-        }
-
-        .spinner {
-            display: none;
-            width: 18px;
-            height: 18px;
-            border: 3px solid rgba(255,255,255,0.35);
-            border-top-color: white;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-
-        .spinner.on { display: inline-block; }
-
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        .video-wrap, .img-wrap { padding: 10px; }
-        video { width: 100%; border-radius: 0; }
-        img { width: 100%; }
-    
-        .tabs { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin:10px 0; }
-        .tabs .label { font-size:12px; color:#999; text-transform:uppercase; letter-spacing:.6px; align-self:center; }
-        .tab { background:#f3f4f6; color:#667eea; border:2px solid #667eea; }
-        .tab.active { background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); color:#fff; border-color:transparent; }
-        .hidden { display:none !important; }
-        .upload-box { border:3px dashed #667eea; border-radius:12px; padding:28px; text-align:center; background:#f8f9ff; cursor:pointer; }
-        .upload-box.over { border-color:#764ba2; background:#e8eaff; }
-        .upload-box input { display:none; }
-        .samples { margin-top:12px; display:flex; gap:8px; flex-wrap:wrap; justify-content:center; align-items:center; }
-        .status-bar { grid-template-columns: repeat(4, 1fr); }
-        @media (max-width: 900px) { .status-bar { grid-template-columns: 1fr 1fr; } }
-        .results { list-style:none; padding:12px 16px; min-height:48px; }
-        .results li { padding:6px 0; border-bottom:1px solid #e0e4ff; color:#333; font-size:15px; }
-        .results li.none { color:#999; border:none; }
-        .speller { margin-top:16px; padding:14px; }
-        .spell-text { min-height:64px; font-size:32px; font-weight:800; letter-spacing:2px; padding:10px 14px; background:#fff; border:2px solid #e0e4ff; border-radius:10px; white-space:pre-wrap; word-break:break-all; color:#333; }
-        .spell-row { display:flex; gap:14px; align-items:center; margin-top:10px; flex-wrap:wrap; }
-        .candidate { font-size:28px; font-weight:800; color:#764ba2; min-width:40px; text-align:center; }
-        .bar { flex:1; min-width:120px; height:10px; background:#e0e4ff; border-radius:6px; overflow:hidden; }
-        .bar > div { height:100%; width:0; background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); }
-        footer { margin-top:16px; text-align:center; font-size:12px; color:#777; }
-        .media { max-height:420px; }
-        canvas { display:none; }
-</style>
-</head>
-<body>
-<div class="container">
-  <h1>🎯 AI Vision Detection</h1>
-
-  <div class="tabs" id="modeTabs" role="tablist" aria-label="Mode">
-    <span class="label">Mode</span>
-    <button class="tab" data-mode="objects">Objects</button>
-    <button class="tab" data-mode="faces">Facial expression</button>
-    <button class="tab" data-mode="sign">Sign language</button>
-  </div>
-  <div class="tabs hidden" id="signTabs" aria-label="Sign mode">
-    <button class="tab" data-sign="spell">Fingerspelling (A–Z)</button>
-    <button class="tab" data-sign="gestures">Gestures</button>
-  </div>
-  <div class="tabs" id="sourceTabs" aria-label="Source">
-    <span class="label">Source</span>
-    <button class="tab" data-source="webcam">Webcam</button>
-    <button class="tab" data-source="video">Video file</button>
-    <button class="tab" data-source="image">Image</button>
-  </div>
-
-  <div id="webcamControls" class="controls hidden">
-    <button id="startBtn" class="btn-primary">Start camera</button>
-    <button id="stopBtn" class="btn-secondary hidden">Stop camera</button>
-  </div>
-
-  <div id="videoControls" class="hidden">
-    <div class="controls">
-      <input type="file" id="videoInput" accept="video/*">
-    </div>
-    <div class="samples" id="videoSamples"></div>
-  </div>
-
-  <div id="imageControls" class="hidden" style="margin-bottom:16px">
-    <div class="upload-box" id="uploadBox">
-      <div style="font-size:38px;margin-bottom:10px">📸</div>
-      <div style="font-size:15px;color:#555;margin-bottom:6px">Drag and drop an image here</div>
-      <div style="font-size:13px;color:#999">or click to select a file (max 10 MB)</div>
-      <input type="file" id="fileInput" accept="image/*">
-    </div>
-    <div class="samples" id="imageSamples"></div>
-  </div>
-
-  <div class="top-row">
-    <div class="panel">
-      <div class="panel-header"><span id="inputTitle">Input</span></div>
-      <div class="img-wrap">
-        <video id="video" class="media hidden" playsinline muted controls></video>
-        <img id="originalImg" class="media hidden" alt="Original image">
-        <div id="inputEmpty" class="small" style="padding:60px 0">Choose a source to start.</div>
-      </div>
-    </div>
-    <div class="panel">
-      <div class="panel-header"><span>Result (annotated)</span><span id="badge" style="font-size:12px;font-weight:800;color:#764ba2">0 detections</span></div>
-      <div class="img-wrap"><img id="resultImg" class="media" alt="Annotated result"></div>
-    </div>
-  </div>
-
-  <div class="status-bar">
-    <div class="stat-card"><div class="stat-label">Status</div><div class="stat-value" id="statusValue">Idle</div></div>
-    <div class="stat-card"><div class="stat-label">Detections</div><div class="stat-value" id="countValue">0</div></div>
-    <div class="stat-card"><div class="stat-label">FPS</div><div class="stat-value" id="fpsValue">–</div></div>
-    <div class="stat-card"><div class="stat-label">Inference</div><div class="stat-value" id="msValue">–</div></div>
-  </div>
-
-  <div class="panel" style="margin-top:12px">
-    <div class="panel-header"><span>Current detections</span></div>
-    <ul class="results" id="results"></ul>
-  </div>
-
-  <div class="panel speller hidden" id="speller">
-    <div class="panel-header" style="margin:-14px -14px 12px"><span>Fingerspelled text</span></div>
-    <div class="spell-text" id="spellText" aria-live="polite"></div>
-    <div class="spell-row">
-      <span class="stat-label" style="margin:0">Candidate</span>
-      <span class="candidate" id="candidate">–</span>
-      <div class="bar"><div id="holdBar"></div></div>
-    </div>
-    <div class="controls">
-      <button class="btn-secondary" id="spaceBtn">Space</button>
-      <button class="btn-secondary" id="backBtn">Backspace</button>
-      <button class="btn-secondary" id="clearBtn">Clear</button>
-    </div>
-    <div class="small">Hold a letter steady for 0.8 s to add it. Lower your hand for 1.5 s to add a space.</div>
-  </div>
-
-  <div class="error-message" id="errorMessage"></div>
-  <footer>Frames are processed in memory and never stored. Facial expression output is a guess, not a judgement about a person.</footer>
-</div>
-<canvas id="canvas"></canvas>
-
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="Real-time object detection, facial expression and ASL fingerspelling recognition in the browser. CPU only.">
+<title>AI Vision Detection &middot; objects, expressions and sign language</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E">
+<link rel="preload" href="static/fonts/Lexend-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="static/fonts/Figtree-latin.woff2" as="font" type="font/woff2" crossorigin>
 <script>
-'use strict';
-const $ = (id) => document.getElementById(id);
-const video = $('video'), originalImg = $('originalImg'), resultImg = $('resultImg');
-const canvas = $('canvas'), ctx = canvas.getContext('2d');
-const MAX_WIDTH = 640, JPEG_QUALITY = 70, MAX_IMAGE_BYTES = 10 * 1024 * 1024;
-
-const state = { mode: 'objects', sign: 'spell', source: 'webcam' };
-let stream = null;
-let loopGen = 0;            // bumping this cancels the running frame loop
-let loopRunning = false;
-let samples = { objects: [], faces: [], sign: [], video: [] };
-let objectUrls = [];        // blob: URLs we created for input media
-let resultUrl = null;
-let imageGen = 0;
-let fpsTimes = [];
-
-// ---------- helpers ----------
-function setState(s) { document.body.dataset.state = s; }
-function setStatus(s) { $('statusValue').textContent = s; }
-function showError(m) { $('errorMessage').textContent = m; $('errorMessage').classList.add('show'); }
-function clearError() { $('errorMessage').textContent = ''; $('errorMessage').classList.remove('show'); }
-/** Query string for the API: current mode plus the sign sub-mode (ignored by the server unless mode=sign). */
-function qs() { return `mode=${state.mode}&sign_mode=${state.sign}`; }
-/** Remember a blob: URL so revokeUrls() can free it when the input source changes. */
-function trackUrl(u) { objectUrls.push(u); return u; }
-function revokeUrls() { objectUrls.forEach((u) => URL.revokeObjectURL(u)); objectUrls = []; }
-/** True when letters are being fingerspelled from a live source (webcam/video), i.e. the speller panel applies. */
-function spellActive() { return state.mode === 'sign' && state.sign === 'spell' && state.source !== 'image'; }
-
-function renderDetections(list) {
-  const ul = $('results');
-  ul.textContent = '';
-  const items = Array.isArray(list) ? list : [];
-  if (!items.length) {
-    const li = document.createElement('li');
-    li.className = 'none';
-    li.textContent = 'No detections';
-    ul.appendChild(li);
-  }
-  for (const d of items) {
-    const li = document.createElement('li');
-    li.textContent = `${d.class} — ${Math.round((Number(d.confidence) || 0) * 100)}%`;
-    ul.appendChild(li);
-  }
-  $('countValue').textContent = String(items.length);
-  $('badge').textContent = `${items.length} detection${items.length === 1 ? '' : 's'}`;
-}
-
-function resetStats() {
-  fpsTimes = [];
-  $('fpsValue').textContent = '–';
-  $('msValue').textContent = '–';
-  renderDetections([]);
-}
-
-function setResultBlobUrl(url) {
-  if (resultUrl) URL.revokeObjectURL(resultUrl);
-  resultUrl = url;
-  resultImg.src = url;
-}
-
-// ---------- fingerspelling text builder (mirrors WordBuilder in app/sign.py) ----------
-const builder = {
-  holdS: 0.8, spaceS: 1.5, minConf: 0.6,
-  text: '', current: null, since: 0, committed: false, lastSeen: null,
-  reset() { this.current = null; this.since = 0; this.committed = false; this.lastSeen = null; },
-  /**
-   * Feed one frame's prediction. A letter held for holdS seconds is committed once;
-   * no letter for spaceS seconds inserts a space. Keep in sync with WordBuilder in app/sign.py.
-   * @param {?string} letter predicted letter or null if no hand
-   * @param {number} conf prediction confidence 0..1
-   * @param {number} t timestamp in seconds
-   */
-  feed(letter, conf, t) {
-    if (letter == null || conf < this.minConf) {
-      this.current = null; this.committed = false;
-      if (this.lastSeen !== null && t - this.lastSeen >= this.spaceS && this.text && !this.text.endsWith(' ')) {
-        this.text += ' ';
-      }
-    } else {
-      this.lastSeen = t;
-      if (letter !== this.current) {
-        this.current = letter; this.since = t; this.committed = false;
-      } else if (!this.committed && t - this.since >= this.holdS) {
-        this.committed = true;
-        this.text += letter;
-      }
-    }
-    this.render(t);
-  },
-  render(t) {
-    $('spellText').textContent = this.text;
-    $('candidate').textContent = this.current || '–';
-    let p = 0;
-    if (this.current) p = this.committed ? 1 : Math.min(1, (t - this.since) / this.holdS);
-    $('holdBar').style.width = `${Math.round(p * 100)}%`;
-  },
-  edit(fn) { this.text = fn(this.text); this.render(performance.now() / 1000); },
-};
-$('spaceBtn').onclick = () => { if (builder.text && !builder.text.endsWith(' ')) builder.edit((s) => s + ' '); };
-$('backBtn').onclick = () => builder.edit((s) => s.slice(0, -1));
-$('clearBtn').onclick = () => { builder.text = ''; builder.reset(); builder.render(performance.now() / 1000); };
-
-// ---------- frame loop (webcam + video file) ----------
-/** Whether the webcam/video element has a decodable frame to send right now. */
-function sourceReady() {
-  if (state.source === 'webcam') return !!stream && video.videoWidth > 0;
-  if (state.source === 'video') return video.videoWidth > 0 && !video.paused && !video.ended;
-  return false;
-}
-
-/**
- * Send frames to the server one at a time while the source is live.
- * @param {number} gen Loop generation; the loop exits as soon as loopGen changes (stopLoop/startLoop),
- *   which is how mode or source switches cancel a request cycle without races.
- */
-async function frameLoop(gen) {
-  if (loopRunning) return;
-  loopRunning = true;
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  try {
-    // One request in flight at a time: each iteration awaits its own round-trip.
-    while (gen === loopGen) {
-      if (!sourceReady()) {
-        if (state.source === 'video' && (video.ended || !video.src)) break;
-        await sleep(100);
-        if (state.source === 'video' && video.paused) { setStatus('Paused'); }
-        continue;
-      }
-      const t0 = performance.now();
-      try {
-        const vw = video.videoWidth, vh = video.videoHeight;
-        const w = Math.min(vw, MAX_WIDTH), h = Math.round(vh * w / vw);
-        canvas.width = w; canvas.height = h;
-        ctx.drawImage(video, 0, 0, w, h);
-        const blob = await new Promise((r) => canvas.toBlob(r, 'image/jpeg', JPEG_QUALITY / 100));
-        if (!blob) throw new Error('Could not encode frame');
-        const fd = new FormData();
-        fd.append('frame', blob, 'frame.jpg');
-        const spellAtSend = spellActive();
-        const res = await fetch(`/api/frame?${qs()}&quality=${JPEG_QUALITY}`, { method: 'POST', body: fd });
-        if (!res.ok) throw new Error(`Backend error: ${res.status} ${(await res.text().catch(() => '')).slice(0, 200)}`);
-        const out = await res.blob();
-        if (gen !== loopGen) break;
-        const t1 = performance.now();
-        let dets = [];
-        try { dets = JSON.parse(res.headers.get('X-Detections') || '[]'); } catch (e) { dets = []; }
-        setResultBlobUrl(URL.createObjectURL(out));
-        renderDetections(dets);
-        $('msValue').textContent = `${res.headers.get('X-Inference-Ms') || '–'} ms`;
-        fpsTimes.push(t1);
-        if (fpsTimes.length > 11) fpsTimes.shift();
-        if (fpsTimes.length > 1) {
-          const fps = (fpsTimes.length - 1) * 1000 / (t1 - fpsTimes[0]);
-          $('fpsValue').textContent = fps.toFixed(1);
-        }
-        if (spellAtSend && spellActive()) {
-          let best = null;
-          for (const d of dets) if (!best || d.confidence > best.confidence) best = d;
-          builder.feed(best ? best.class : null, best ? best.confidence : 0, t1 / 1000);
-        }
-        clearError();
-        setStatus('Running');
-      } catch (err) {
-        if (gen !== loopGen) break;
-        showError(err.message || String(err));
-        setStatus('Error');
-        await sleep(1000);
-      }
-      void t0;
-    }
-  } finally {
-    loopRunning = false;
-    // A newer loop may have been requested while this one was winding down.
-    if (gen !== loopGen && sourceWantsLoop()) startLoop();
-  }
-}
-
-function sourceWantsLoop() {
-  return (state.source === 'webcam' && !!stream) || (state.source === 'video' && !!video.src && !video.ended);
-}
-function startLoop() { loopGen++; frameLoop(loopGen); }
-function stopLoop() { loopGen++; }
-
-// ---------- webcam ----------
-async function startCamera() {
-  clearError();
-  if (stream) return;
-  try {
-    $('startBtn').disabled = true;
-    setStatus('Starting…');
-    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-    if (state.source !== 'webcam') { stopCameraTracks(); return; }
-    video.controls = false;
-    video.srcObject = stream;
-    await video.play().catch(() => {});
-    $('startBtn').classList.add('hidden');
-    $('stopBtn').classList.remove('hidden');
-    resetStats();
-    builder.reset();
-    setStatus('Running');
-    startLoop();
-  } catch (err) {
-    stream = null;
-    showError(err.message || String(err));
-    setStatus('Error');
-  } finally {
-    $('startBtn').disabled = false;
-  }
-}
-function stopCameraTracks() {
-  if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
-  video.srcObject = null;
-}
-function stopCamera() {
-  stopLoop();
-  stopCameraTracks();
-  $('startBtn').classList.remove('hidden');
-  $('stopBtn').classList.add('hidden');
-  setStatus('Stopped');
-}
-$('startBtn').onclick = startCamera;
-$('stopBtn').onclick = stopCamera;
-
-// ---------- video file ----------
-function loadVideo(url, isObjectUrl) {
-  stopLoop();
-  video.pause();
-  revokeUrls();
-  if (isObjectUrl) trackUrl(url);
-  clearError();
-  resetStats();
-  builder.reset();
-  setState('loading');
-  video.controls = true;
-  video.muted = true;
-  video.src = url;
-  video.load();
-  setStatus('Loading video…');
-  video.play().catch(() => setStatus('Press play'));
-}
-video.addEventListener('play', () => {
-  if (state.source !== 'video') return;
-  setStatus('Running'); setState('running');
-  startLoop();
-});
-video.addEventListener('pause', () => { if (state.source === 'video' && !video.ended) setStatus('Paused'); });
-video.addEventListener('ended', () => {
-  if (state.source !== 'video') return;
-  stopLoop();
-  setStatus('Ended');
-  setState('ended');
-});
-video.addEventListener('error', () => {
-  if (state.source === 'video' && video.getAttribute('src')) showError('Could not play this video');
-});
-$('videoInput').addEventListener('change', (e) => {
-  const f = e.target.files && e.target.files[0];
-  if (f) loadVideo(URL.createObjectURL(f), true);
-});
-
-// ---------- image ----------
-async function showImageResult(res) {
-  if (!res.ok) throw new Error(`Backend error: ${res.status} ${(await res.text().catch(() => '')).slice(0, 200)}`);
-  const data = await res.json();
-  resultImg.src = data.result_image;
-  renderDetections(data.detections || []);
-  $('msValue').textContent = data.inference_ms != null ? `${data.inference_ms} ms` : '–';
-  setStatus('Complete');
-}
-
-function setOriginal(url) {
-  originalImg.src = url;
-  originalImg.classList.remove('hidden');
-  $('inputEmpty').classList.add('hidden');
-}
-
-async function handleUpload(file) {
-  clearError();
-  if (!file.type || !file.type.startsWith('image/')) return failImage('Please select an image file');
-  if (file.size > MAX_IMAGE_BYTES) return failImage('File size must be less than 10 MB');
-  const gen = ++imageGen;
-  revokeUrls();
-  setOriginal(trackUrl(URL.createObjectURL(file)));
-  setState('busy'); setStatus('Processing…');
-  try {
-    const fd = new FormData();
-    fd.append('file', file);
-    const res = await fetch(`/api/analyze?${qs()}`, { method: 'POST', body: fd });
-    if (gen !== imageGen) return;
-    await showImageResult(res);
-    setState('done');
-  } catch (err) { failImage(err.message || String(err)); }
-}
-
-async function runImageSample(name) {
-  clearError();
-  const group = state.mode;
-  const gen = ++imageGen;
-  revokeUrls();
-  setOriginal(`/demo/samples/${encodeURIComponent(group)}/${encodeURIComponent(name)}`);
-  setState('busy'); setStatus('Processing…');
-  try {
-    const res = await fetch(`/demo/analyze/${encodeURIComponent(group)}/${encodeURIComponent(name)}?${qs()}`, { method: 'POST' });
-    if (gen !== imageGen) return;
-    await showImageResult(res);
-    setState('done');
-  } catch (err) { failImage(err.message || String(err)); }
-}
-function failImage(msg) { showError(msg); setStatus('Error'); setState('error'); }
-
-const box = $('uploadBox'), fileInput = $('fileInput');
-box.addEventListener('click', () => fileInput.click());
-box.addEventListener('dragover', (e) => { e.preventDefault(); box.classList.add('over'); });
-box.addEventListener('dragleave', () => box.classList.remove('over'));
-box.addEventListener('drop', (e) => {
-  e.preventDefault(); box.classList.remove('over');
-  if (e.dataTransfer.files.length) handleUpload(e.dataTransfer.files[0]);
-});
-fileInput.addEventListener('change', (e) => {
-  if (e.target.files.length) handleUpload(e.target.files[0]);
-  e.target.value = '';
-});
-
-// ---------- sample buttons ----------
-function sampleButton(name, onClick) {
-  const b = document.createElement('button');
-  b.className = 'btn-secondary';
-  b.textContent = name.replace(/\.[^.]+$/, '');
-  b.addEventListener('click', onClick);
-  return b;
-}
-function renderSamples() {
-  const img = $('imageSamples'), vid = $('videoSamples');
-  img.textContent = ''; vid.textContent = '';
-  const group = samples[state.mode] || [];
-  if (group.length) {
-    const s = document.createElement('span'); s.className = 'small'; s.style.marginTop = '0';
-    s.textContent = 'Try a bundled sample:'; img.appendChild(s);
-    group.forEach((n) => img.appendChild(sampleButton(n, () => runImageSample(n))));
-  }
-  if ((samples.video || []).length) {
-    const s = document.createElement('span'); s.className = 'small'; s.style.marginTop = '0';
-    s.textContent = 'No video? Try a bundled sample:'; vid.appendChild(s);
-    samples.video.forEach((n) => vid.appendChild(sampleButton(n, () => loadVideo(`/demo/samples/video/${encodeURIComponent(n)}`, false))));
-  }
-}
-
-// ---------- mode / source switching ----------
-function syncUI() {
-  document.querySelectorAll('[data-mode]').forEach((b) => b.classList.toggle('active', b.dataset.mode === state.mode));
-  document.querySelectorAll('[data-sign]').forEach((b) => b.classList.toggle('active', b.dataset.sign === state.sign));
-  document.querySelectorAll('[data-source]').forEach((b) => b.classList.toggle('active', b.dataset.source === state.source));
-  $('signTabs').classList.toggle('hidden', state.mode !== 'sign');
-  $('webcamControls').classList.toggle('hidden', state.source !== 'webcam');
-  $('videoControls').classList.toggle('hidden', state.source !== 'video');
-  $('imageControls').classList.toggle('hidden', state.source !== 'image');
-  $('speller').classList.toggle('hidden', !spellActive());
-  const showVideo = state.source !== 'image' && (state.source === 'webcam' ? !!stream : !!video.getAttribute('src'));
-  video.classList.toggle('hidden', !showVideo);
-  originalImg.classList.toggle('hidden', state.source !== 'image' || !originalImg.getAttribute('src'));
-  $('inputEmpty').classList.toggle('hidden', showVideo || (state.source === 'image' && !!originalImg.getAttribute('src')));
-  $('inputTitle').textContent = state.source === 'webcam' ? 'Live camera' : state.source === 'video' ? 'Video' : 'Original';
-  renderSamples();
-}
-
-function clearResult() {
-  resultImg.removeAttribute('src');
-  resetStats();
-  clearError();
-}
-
-function setMode(mode, sign) {
-  const changed = mode !== state.mode || (sign && sign !== state.sign);
-  state.mode = mode;
-  if (sign) state.sign = sign;
-  if (!changed) return syncUI();
-  imageGen++;
-  // Drop any in-flight frame from the old mode; the loop restarts itself with the new one.
-  if (loopRunning) stopLoop();
-  if (state.source === 'image') { originalImg.removeAttribute('src'); setState('idle'); setStatus('Idle'); clearResult(); }
-  builder.text = ''; builder.reset(); builder.render(performance.now() / 1000);
-  syncUI();
-}
-
-function setSource(source) {
-  if (source === state.source) return syncUI();
-  const prev = state.source;
-  stopLoop();
-  imageGen++;
-  if (prev === 'webcam') stopCamera();
-  if (prev === 'video') { video.pause(); video.removeAttribute('src'); video.load(); }
-  revokeUrls();
-  state.source = source;
-  video.controls = source === 'video';
-  originalImg.removeAttribute('src');
-  clearResult();
-  setStatus('Idle'); setState('idle');
-  syncUI();
-}
-
-document.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
-document.querySelectorAll('[data-sign]').forEach((b) => b.addEventListener('click', () => setMode('sign', b.dataset.sign)));
-document.querySelectorAll('[data-source]').forEach((b) => b.addEventListener('click', () => setSource(b.dataset.source)));
-window.addEventListener('beforeunload', () => { stopCameraTracks(); revokeUrls(); });
-video.addEventListener('loadstart', syncUI);
-
-// ---------- init ----------
-(async function init() {
-  const p = new URLSearchParams(location.search);
-  const m = p.get('mode'), s = p.get('sign_mode'), src = p.get('source'), sample = p.get('sample');
-  if (['objects', 'faces', 'sign'].includes(m)) state.mode = m;
-  if (['spell', 'gestures'].includes(s)) state.sign = s;
-  if (['webcam', 'video', 'image'].includes(src)) state.source = src;
-  setState('idle');
-  resetStats();
-  builder.render(performance.now() / 1000);
-  video.controls = state.source === 'video';
-  syncUI();
-  try {
-    const r = await fetch('/demo/samples');
-    if (r.ok) { samples = Object.assign(samples, await r.json()); renderSamples(); }
-  } catch (e) { /* samples are optional */ }
-  if (sample && state.source === 'image') runImageSample(sample);
-  else if (sample && state.source === 'video') { loadVideo(`/demo/samples/video/${encodeURIComponent(sample)}`, false); syncUI(); }
+// Before first paint: theme (?theme=, else the stored choice, else light) and embed mode (?embed=1).
+(function () {
+  var q = null, t = null;
+  try { q = new URLSearchParams(location.search); t = q.get('theme') || localStorage.getItem('avd-theme'); } catch (e) {}
+  if (t !== 'light' && t !== 'dark') t = 'light';
+  document.documentElement.dataset.theme = t;
+  if (q && q.get('embed') === '1') document.documentElement.dataset.embed = 'true';
 })();
 </script>
+<link rel="stylesheet" href="static/app.css">
+</head>
+<body data-mode="objects" data-state="idle" data-media="none" data-orient="landscape">
+
+<!-- Icons: Lucide v1.55.0 (ISC, https://lucide.dev), plus a custom logo mark -->
+<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+<symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/>
+  <path d="M12 9v4"/>
+  <path d="M12 17h.01"/>
+</symbol>
+<symbol id="i-box" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/>
+  <path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+  <path d="M21 17v2a2 2 0 0 1-2 2h-2"/>
+  <path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+  <circle cx="12" cy="12" r="3"/>
+  <path d="m16 16-1.9-1.9"/>
+</symbol>
+<symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/>
+  <circle cx="12" cy="12" r="3"/>
+</symbol>
+<symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/>
+  <path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/>
+  <path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/>
+  <path d="m2 2 20 20"/>
+</symbol>
+<symbol id="i-hand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/>
+  <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/>
+  <path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/>
+  <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>
+</symbol>
+<symbol id="i-keyboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 8h.01"/>
+  <path d="M12 12h.01"/>
+  <path d="M14 8h.01"/>
+  <path d="M16 12h.01"/>
+  <path d="M18 8h.01"/>
+  <path d="M6 8h.01"/>
+  <path d="M7 16h10"/>
+  <path d="M8 12h.01"/>
+  <rect width="20" height="16" x="2" y="4" rx="2"/>
+</symbol>
+<symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/>
+</symbol>
+<symbol id="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="3" width="5" height="18" rx="1"/>
+  <rect x="5" y="3" width="5" height="18" rx="1"/>
+</symbol>
+<symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/>
+</symbol>
+<symbol id="i-smile" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10V9"/>
+  <path d="M16.472 15a6 6 0 01-8.943 0"/>
+  <path d="M9 10V9"/>
+  <circle cx="12" cy="12" r="10"/>
+</symbol>
+<symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/>
+  <path d="M12 2v2"/>
+  <path d="M12 20v2"/>
+  <path d="m4.93 4.93 1.41 1.41"/>
+  <path d="m17.66 17.66 1.41 1.41"/>
+  <path d="M2 12h2"/>
+  <path d="M20 12h2"/>
+  <path d="m6.34 17.66-1.41 1.41"/>
+  <path d="m19.07 4.93-1.41 1.41"/>
+</symbol>
+<symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/>
+  <path d="m6 6 12 12"/>
+</symbol>
+<symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3" />
+  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+  <path d="m7 10 5 5 5-5" /></symbol>
+<symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></symbol>
+<symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></symbol>
+<symbol id="i-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6" />
+  <path d="M10 14 21 3" />
+  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></symbol>
+<symbol id="i-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4" /></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+  <path d="M21 3v5h-5" />
+  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+  <path d="M8 16H3v5" /></symbol>
+<symbol id="i-camera-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.564 14.558a3 3 0 1 1-4.122-4.121" /><path d="m2 2 20 20" /><path d="M20 20H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 .819-.175" /><path d="M9.695 4.024A2 2 0 0 1 10.004 4h3.993a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v7.344" /></symbol>
+<symbol id="i-switch-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 19H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5" /><path d="M13 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-5" /><circle cx="12" cy="12" r="3" /><path d="m18 22-3-3 3-3" /><path d="m6 2 3 3-3 3" /></symbol>
+</svg>
+
+<a class="skip-link" href="#viewport">Skip to the viewport</a>
+
+<header class="topbar" id="topbar">
+  <a class="brand" href="/" aria-label="Vision, home">
+    <span class="brand-text">
+      <span class="brand-name">Vision</span>
+    </span>
+  </a>
+
+  <!--
+    MODE SWITCH. One radio per mode. To add a mode (for example "Record"): add a button here with
+    data-mode="record" and a matching panel in <aside id="panel"> (see RECORD HOOK below), then call
+    registerMode() from a new js/record.js. Full steps: backend/static/js/README.md.
+  -->
+  <div class="segmented segmented-modes" id="modeSwitch" role="radiogroup" aria-label="Recognition mode">
+    <button type="button" class="seg" role="radio" data-mode="objects" aria-checked="true" aria-keyshortcuts="1">
+      <svg class="icon" aria-hidden="true"><use href="#i-box"/></svg><span>Objects</span><kbd aria-hidden="true">1</kbd>
+    </button>
+    <button type="button" class="seg" role="radio" data-mode="faces" aria-checked="false" aria-keyshortcuts="2">
+      <svg class="icon" aria-hidden="true"><use href="#i-smile"/></svg><span>Expressions</span><kbd aria-hidden="true">2</kbd>
+    </button>
+    <button type="button" class="seg" role="radio" data-mode="sign" aria-checked="false" aria-keyshortcuts="3">
+      <svg class="icon" aria-hidden="true"><use href="#i-hand"/></svg><span>Sign language</span><kbd aria-hidden="true">3</kbd>
+    </button>
+  </div>
+
+  <div class="topbar-actions">
+    <a class="link-pill" id="portfolioLink" href="https://dhiarekik.me" rel="noopener">
+      <span>dhiarekik.me</span><svg class="icon" aria-hidden="true"><use href="#i-external"/></svg>
+    </a>
+    <button type="button" class="icon-btn" id="helpBtn" aria-label="Keyboard shortcuts" aria-haspopup="dialog">
+      <svg class="icon" aria-hidden="true"><use href="#i-keyboard"/></svg>
+    </button>
+    <button type="button" class="icon-btn" id="themeToggle" aria-label="Switch to dark theme">
+      <svg class="icon icon-moon" aria-hidden="true"><use href="#i-moon"/></svg>
+      <svg class="icon icon-sun" aria-hidden="true"><use href="#i-sun"/></svg>
+    </button>
+  </div>
+</header>
+
+<section class="intro" id="intro" aria-labelledby="introTitle">
+  <p class="intro-eyebrow">Computer vision &middot; Case study</p>
+  <h1 class="intro-title" id="introTitle">Teaching a browser to see</h1>
+  <p class="intro-sub">Three vision models running live on your camera, entirely inside this page. No server, no upload.</p>
+</section>
+
+<main class="app" id="app">
+  <section class="stage" aria-label="Live camera">
+    <!-- --ar (camera aspect ratio, set from JS) makes the viewport hug the video: no letterbox bars. -->
+    <div class="viewport" id="viewport" tabindex="0" aria-label="Live camera view. Press space to pause or resume.">
+      <video id="video" playsinline muted autoplay></video>
+      <!-- Shown while the camera is off: a clip of this app on sample photos (scripts/record_previews.py); main.js sets the source per mode. -->
+      <video class="preview" id="preview" muted loop playsinline preload="auto" aria-hidden="true"></video>
+      <div class="model-load hidden" id="modelLoad" role="status" aria-live="polite">
+        <span class="model-load-spinner" aria-hidden="true"></span>
+        <strong id="modelLoadTitle">Preparing model</strong>
+        <span id="modelLoadDetail">Loading on this device…</span>
+        <progress id="modelLoadBar" max="100" value="0" hidden aria-label="Model download progress"></progress>
+      </div>
+      <canvas id="overlay" aria-hidden="true"></canvas>
+
+      <div class="vp-top">
+        <span class="pill" id="statusPill" data-kind="idle"><span class="pill-dot" aria-hidden="true"></span><span id="statusText">Camera off</span></span>
+      </div>
+
+      <!-- Camera off: what this mode does, and the one big call to action. -->
+      <div class="empty" id="empty">
+        <span class="preview-tag">Preview &middot; recorded in this app</span>
+        <h2 class="empty-title" id="emptyTitle">Objects</h2>
+        <p class="empty-text" id="emptyText">Detects 80 kinds of everyday objects.</p>
+        <div class="empty-actions">
+          <button type="button" class="btn btn-primary btn-lg" id="startBtn">
+            <span>Try it with your camera</span>
+          </button>
+        </div>
+        <p class="empty-note">Runs in your browser. Nothing is uploaded.</p>
+      </div>
+
+      <!--
+        Camera blocked / missing / busy / not secure. main.js sets data-kind to one of
+        denied | nocamera | busy | insecure | error, fills #helpTitle and #helpText, and shows the
+        per-browser steps (#helpSteps) only for "denied", opening the details block of the detected browser.
+      -->
+      <div class="cam-help hidden" id="camHelp" data-kind="denied">
+        <h2 class="empty-title" id="cameraHelpTitle" tabindex="-1">The camera is blocked</h2>
+        <p class="empty-text" id="helpText">This page needs your camera, and the browser is not allowing it.</p>
+        <div class="help-steps" id="helpSteps">
+          <details class="howto" data-browser="chrome">
+            <summary><span>Chrome, Edge, Brave</span><svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
+            <p>Click the camera or lock icon at the left of the address bar, set <b>Camera</b> to <b>Allow</b>, then press <b>Try again</b>.</p>
+          </details>
+          <details class="howto" data-browser="firefox">
+            <summary><span>Firefox</span><svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
+            <p>Click the crossed-out camera icon in the address bar, remove the blocked setting, press <b>Try again</b> and choose <b>Allow</b>.</p>
+          </details>
+          <details class="howto" data-browser="safari">
+            <summary><span>Safari on Mac</span><svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
+            <p>Open <b>Safari &gt; Settings &gt; Websites &gt; Camera</b>, set this site to <b>Allow</b>, then press <b>Try again</b>.</p>
+          </details>
+          <details class="howto" data-browser="ios">
+            <summary><span>iPhone and iPad</span><svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
+            <p>Tap <b>aA</b> in the address bar, then <b>Website Settings &gt; Camera &gt; Allow</b>. Or open <b>Settings &gt; Safari &gt; Camera</b>.</p>
+          </details>
+          <details class="howto" data-browser="android">
+            <summary><span>Chrome on Android</span><svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg></summary>
+            <p>Tap the lock icon, then <b>Permissions &gt; Camera &gt; Allow</b>. Or open <b>Settings &gt; Site settings &gt; Camera</b>.</p>
+          </details>
+        </div>
+        <div class="empty-actions">
+          <button type="button" class="btn btn-primary btn-lg" id="retryBtn">
+            <svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg><span>Try again</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="vp-error hidden" id="errorBox" role="alert">
+        <svg class="icon" aria-hidden="true"><use href="#i-alert"/></svg>
+        <span id="errorText"></span>
+        <button type="button" class="icon-btn" id="errorClose" aria-label="Dismiss error"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+      </div>
+    </div>
+
+    <!-- Camera controls. Hidden by CSS until the camera is running (body[data-media="live"]). -->
+    <div class="toolbar" id="toolbar" role="toolbar" aria-label="Camera controls">
+      <button type="button" class="btn" id="playBtn" aria-keyshortcuts="Space">
+        <svg class="icon icon-pause" aria-hidden="true"><use href="#i-pause"/></svg>
+        <svg class="icon icon-play" aria-hidden="true"><use href="#i-play"/></svg>
+        <span id="playLabel">Pause</span>
+      </button>
+      <button type="button" class="btn hidden" id="flipBtn" aria-keyshortcuts="F" title="Switch between the front and back camera (F)">
+        <svg class="icon" aria-hidden="true"><use href="#i-switch-camera"/></svg><span>Flip camera</span>
+      </button>
+      <button type="button" class="btn" id="snapBtn" aria-keyshortcuts="S" title="Save the annotated frame as a PNG (S)">
+        <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg><span>Snapshot</span>
+      </button>
+      <button type="button" class="btn" id="overlayToggle" aria-pressed="true" aria-keyshortcuts="O" title="Show or hide detections (O)">
+        <svg class="icon icon-on" aria-hidden="true"><use href="#i-eye"/></svg>
+        <svg class="icon icon-off" aria-hidden="true"><use href="#i-eye-off"/></svg>
+        <span>Detections</span>
+      </button>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-quiet" id="stopBtn" title="Stop camera">
+        <svg class="icon" aria-hidden="true"><use href="#i-camera-off"/></svg><span>Stop camera</span>
+      </button>
+    </div>
+  </section>
+
+  <aside class="panel" id="panel" aria-label="Insights" data-view="objects">
+    <header class="panel-head">
+      <div class="panel-heading">
+        <h2 class="panel-title" id="panelTitle">Objects</h2>
+        <p class="panel-sub" id="panelSub">80 everyday object classes</p>
+      </div>
+      <div class="segmented segmented-small hidden" id="signSwitch" role="radiogroup" aria-label="Sign language mode">
+        <button type="button" class="seg" role="radio" data-sign="spell" aria-checked="true">Letters</button>
+        <button type="button" class="seg" role="radio" data-sign="gestures" aria-checked="false">Gestures</button>
+      </div>
+    </header>
+
+    <div class="panel-body" id="panelBody">
+      <!-- Each mode owns one .insight[data-panel]; the mode registry shows the active one. -->
+      <div class="insight" id="insightObjects" data-panel="objects">
+
+        <div class="filters">
+          <div class="filter-row">
+            <label class="filter-label" for="minConf">Min confidence</label>
+            <output class="filter-value" id="minConfOut" for="minConf">35%</output>
+          </div>
+          <input type="range" id="minConf" class="range" min="0" max="95" step="5" value="35" aria-describedby="hiddenNote">
+          <p class="filter-note" id="hiddenNote"></p>
+          <div class="chips" id="classChips" role="group" aria-label="Show or hide classes"></div>
+        </div>
+
+        <ul class="bars" id="objBars" aria-label="Detections per class"></ul>
+        <p class="none" id="objNone">Nothing detected yet.</p>
+      </div>
+
+      <div class="insight hidden" id="insightFaces" data-panel="faces">
+        <div class="faces" id="faceList"></div>
+        <p class="none" id="faceNone">No face in view.</p>
+      </div>
+
+      <div class="insight hidden" id="insightSign" data-panel="sign">
+        <div class="sign-hero">
+          <div class="ring" id="holdRing" role="img" aria-label="Hold progress">
+            <svg viewBox="0 0 120 120" aria-hidden="true">
+              <circle class="ring-track" cx="60" cy="60" r="52"/>
+              <circle class="ring-value" id="ringValue" cx="60" cy="60" r="52" transform="rotate(-90 60 60)"/>
+            </svg>
+            <span class="ring-letter" id="signMain">&ndash;</span>
+          </div>
+          <div class="sign-meta">
+            <span class="sign-label" id="signLabel">Current letter</span>
+            <span class="sign-conf" id="signConf">No hand in view</span>
+          </div>
+        </div>
+
+        <!-- Letters only: the "Try" challenge (shows the reference sign, checks the user's sign). -->
+        <section class="try" id="tryCard" aria-labelledby="tryTitle" data-state="waiting">
+          <div class="try-ref"><img id="tryImg" src="static/asl/B.svg" alt="ASL hand shape for the letter B" width="96" height="96"></div>
+          <div class="try-body">
+            <p class="eyebrow">Challenge</p>
+            <h2 class="try-title" id="tryTitle">Try: <span class="try-letter" id="tryLetter">B</span></h2>
+            <p class="try-hint" id="tryHint">Copy the hand shape and hold it.</p>
+            <div class="try-progress" role="presentation"><span class="try-bar" id="tryBar"></span></div>
+            <div class="try-actions">
+              <button type="button" class="btn btn-sm" id="tryNext"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg><span>New letter</span></button>
+              <span class="streak" id="tryStreak" title="Letters signed in a row"><svg class="icon" aria-hidden="true"><use href="#i-flame"/></svg><b id="tryStreakN">0</b></span>
+            </div>
+          </div>
+          <div class="try-success" id="trySuccess" role="status" aria-live="polite" hidden>
+            <span class="try-check"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg></span>
+            <span class="try-success-text" id="trySuccessText"></span>
+          </div>
+        </section>
+
+        <div class="speller" id="speller">
+          <div class="speller-head">
+            <span class="summary-label">Spelling</span>
+            <span class="speller-hint">Hold a letter for 0.8 s to add it</span>
+          </div>
+          <div class="word" id="wordBox" aria-live="polite" aria-atomic="true" aria-label="Spelled text">
+            <span id="wordText"></span><span class="caret" aria-hidden="true"></span>
+          </div>
+          <div class="speller-actions">
+            <button type="button" class="btn" id="spaceBtn"><span>Space</span></button>
+            <button type="button" class="btn" id="backBtn"><span>Delete</span></button>
+            <button type="button" class="btn btn-quiet" id="clearBtn"><span>Clear</span></button>
+          </div>
+        </div>
+
+        <details class="chart" id="aslChart" open>
+          <summary>
+            <span class="chart-title">ASL alphabet</span>
+            <span class="chart-sub">tap a letter to practise it</span>
+            <svg class="icon chart-chevron" aria-hidden="true"><use href="#i-chevron"/></svg>
+          </summary>
+          <div class="chart-grid" id="chartGrid" role="group" aria-label="ASL alphabet reference"></div>
+          <p class="chart-credit">Hand shapes: wpclipart.com via Wikimedia Commons, public domain. J and Z are drawn with their motion.</p>
+        </details>
+
+        <p class="none" id="signMotionNote">J and Z need motion, so they are less reliable.</p>
+      </div>
+
+      <!--
+        RECORD HOOK. A fourth mode adds its panel here, next to the other .insight blocks:
+          <div class="insight hidden" id="insightRecord" data-panel="record"> ... </div>
+        (and a matching button in #modeSwitch). Nothing else in this file changes.
+      -->
+
+      <p class="visually-hidden" id="liveSummary" aria-live="polite" aria-atomic="true"></p>
+    </div>
+
+    <a class="open-full hidden" id="openFull" href="/" target="_blank" rel="noopener">
+      <span>Open the full version</span><svg class="icon" aria-hidden="true"><use href="#i-external"/></svg>
+    </a>
+  </aside>
+</main>
+
+<footer class="statusbar" id="statusbar" role="contentinfo">
+  <ul class="stats" aria-label="Performance">
+    <li class="stat" data-stat="fps" title="Frames analysed per second">
+      <span class="stat-label">FPS</span>
+      <span class="stat-value" id="fps">&ndash;</span>
+      <svg class="spark" id="spark" viewBox="0 0 80 22" preserveAspectRatio="none" aria-hidden="true">
+        <polyline id="sparkLine" points=""/>
+      </svg>
+    </li>
+    <li class="stat" data-stat="latency" id="latencyStat" title="Processing time per frame">
+      <span class="stat-label">Frame</span>
+      <span class="stat-value" id="latency">&ndash;</span>
+    </li>
+    <li class="stat" data-stat="model">
+      <span class="stat-label">Model</span>
+      <span class="stat-value stat-model" id="modelName">&ndash;</span>
+    </li>
+    <li class="stat badge-stat" data-stat="device">
+      <span class="badge" id="deviceBadge" title="Inference device"><span id="deviceText">Browser</span></span>
+    </li>
+  </ul>
+  <p class="privacy">
+    <a href="https://github.com/dhia-rek/ai-vision-detection" rel="noopener">Source</a>
+  </p>
+</footer>
+
+<!-- The case study: how the project got here, in four short chapters. Hidden in embed mode. -->
+<article class="story" id="story" aria-labelledby="storyTitle">
+  <header class="story-head">
+    <p class="intro-eyebrow">The story</p>
+    <h2 class="story-title" id="storyTitle">How it was built</h2>
+  </header>
+
+  <ol class="chapters">
+    <li class="chapter">
+      <span class="chapter-num">01</span>
+      <h3>One camera, three ways to see</h3>
+      <p>Objects for the everyday world, expressions for faces, and ASL fingerspelling for people who sign instead of speak. Each mode is its own model, one tap away.</p>
+      <p class="chapter-metric"><b>3</b> models, <b>1</b> camera</p>
+    </li>
+    <li class="chapter">
+      <span class="chapter-num">02</span>
+      <h3>Teaching it the alphabet</h3>
+      <p>The first letter model was right 47% of the time on photos it had never seen. I rebuilt the hand features, retrained on open datasets and tested on a separate collection.</p>
+      <p class="chapter-metric"><b>47% &rarr; 76%</b> letter accuracy</p>
+    </li>
+    <li class="chapter">
+      <span class="chapter-num">03</span>
+      <h3>Moving it into your browser</h3>
+      <p>It started as a Python server that received camera frames. I exported every model to run in the page with ONNX Runtime Web and MediaPipe, so frames never leave the device and hosting is free. Tests check that the browser gives the same answers as Python.</p>
+      <p class="chapter-metric"><b>22 / 22</b> parity tests</p>
+    </li>
+    <li class="chapter">
+      <span class="chapter-num">04</span>
+      <h3>What is still hard</h3>
+      <p>Reading emotion from a face is the weakest part: 25% on 700 real-world photos, where chance is 14%. Treat it as a rough guess. Letters J and Z need motion, which one frame cannot show.</p>
+      <p class="chapter-metric"><b>Honest</b> numbers, measured</p>
+    </li>
+  </ol>
+
+  <section class="hood" aria-labelledby="hoodTitle">
+    <h3 id="hoodTitle">Under the hood</h3>
+    <dl class="hood-grid">
+      <div><dt>Objects</dt><dd>YOLO11n, about 29 fps on a 6-core CPU, no GPU</dd></div>
+      <div><dt>Expressions</dt><dd>YuNet face finder + MobileFaceNet classifier</dd></div>
+      <div><dt>Sign language</dt><dd>MediaPipe hand landmarks + my letter classifier</dd></div>
+      <div><dt>In the browser</dt><dd>ONNX Runtime Web, Web Workers, WebGPU when available</dd></div>
+      <div><dt>Behind it</dt><dd>Python for training, evaluation and tests</dd></div>
+      <div><dt>Hosting</dt><dd>Static files on GitHub Pages, no server</dd></div>
+    </dl>
+    <p class="hood-links">
+      <a href="https://github.com/dhia-rek/ai-vision-detection" rel="noopener">Code on GitHub</a>
+      <a href="https://github.com/dhia-rek/ai-vision-detection/blob/main/docs/architecture.md" rel="noopener">Architecture</a>
+      <a href="https://dhiarekik.me" rel="noopener">More projects</a>
+    </p>
+  </section>
+
+  <p class="byline">Built by <a href="https://dhiarekik.me" rel="noopener">Dhia Rekik</a></p>
+</article>
+
+<div class="toasts" id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
+
+<dialog id="helpDialog" class="dialog" aria-labelledby="shortcutsTitle">
+  <form method="dialog" class="dialog-body">
+    <div class="dialog-head">
+      <h2 id="shortcutsTitle">Keyboard shortcuts</h2>
+      <button class="icon-btn" aria-label="Close"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button>
+    </div>
+    <dl class="shortcuts">
+      <div><dt><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></dt><dd>Objects, Expressions, Sign language</dd></div>
+      <div><dt><kbd>Space</kbd></dt><dd>Pause or resume the camera</dd></div>
+      <div><dt><kbd>F</kbd></dt><dd>Switch front and back camera</dd></div>
+      <div><dt><kbd>O</kbd></dt><dd>Show or hide detections</dd></div>
+      <div><dt><kbd>S</kbd></dt><dd>Save the annotated frame as a PNG</dd></div>
+      <div><dt><kbd>T</kbd></dt><dd>Switch light and dark theme</dd></div>
+      <div><dt><kbd>Backspace</kbd></dt><dd>Delete the last spelled letter</dd></div>
+      <div><dt><kbd>?</kbd></dt><dd>Show this list</dd></div>
+    </dl>
+  </form>
+</dialog>
+
+<canvas id="grab" class="hidden" aria-hidden="true"></canvas>
+<script type="module" src="static/app.js"></script>
 </body>
 </html>

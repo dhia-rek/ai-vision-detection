@@ -33,6 +33,14 @@ def test_index_served(client):
     assert "text/html" in r.headers["content-type"]
 
 
+def test_browser_asl_model_is_served(client):
+    r = client.get("/api/models/asl-letters-web")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("application/json")
+    assert r.json()["feature_version"] == 3
+    assert r.json()["input_size"] == 287
+
+
 def test_modes_endpoint(client):
     body = client.get("/api/modes").json()
     assert set(body["modes"]) == {"objects", "faces", "sign"}
@@ -62,6 +70,35 @@ def test_analyze_every_mode(client, jpeg, params):
     raw = base64.b64decode(body["result_image"][len(prefix) :])
     img = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
     assert img.shape == (80, 120, 3)
+
+
+def test_analyze_reports_image_size_and_device(client, jpeg):
+    body = post_image(client, "/api/analyze", jpeg).json()
+    assert body["image_size"] == {"width": 120, "height": 80}
+    assert body["device"] == "cpu"
+
+
+@pytest.mark.parametrize("params", MODE_PARAMS)
+def test_analyze_without_annotation(client, jpeg, params):
+    """annotate=false returns the same JSON minus the burned-in image."""
+    full = post_image(client, "/api/analyze", jpeg, params).json()
+    lean = post_image(client, "/api/analyze", jpeg, {**params, "annotate": "false"}).json()
+    assert "result_image" not in lean
+    assert lean == {k: v for k, v in full.items() if k not in ("result_image", "inference_ms")} | {
+        "inference_ms": lean["inference_ms"]
+    }
+
+
+def test_analyze_annotate_defaults_to_true(client, jpeg):
+    assert "result_image" in post_image(client, "/api/analyze", jpeg).json()
+    assert "result_image" in post_image(client, "/detect/", jpeg).json()
+
+
+def test_demo_analyze_without_annotation(client):
+    body = client.post("/demo/analyze/objects/dog.jpg", params={"annotate": "false"}).json()
+    assert "result_image" not in body
+    assert body["image_size"]["width"] > 0
+    assert body["detections"]
 
 
 def test_analyze_default_mode_is_objects(client, jpeg):
