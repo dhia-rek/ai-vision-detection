@@ -46,6 +46,16 @@ give the same answers. Full picture with a diagram: **[docs/architecture.md](doc
 - **Downloads on demand:** a mode's model loads the first time you open it (5 to 20 MB) and is cached for later visits.
 - **Static hosting:** the site is plain files on GitHub Pages ([DEPLOY.md](DEPLOY.md)).
 
+## Built with
+
+- **Models:** YOLO11n (objects), YuNet + MobileFaceNet from the OpenCV Zoo (expressions), MediaPipe hands plus this
+  project's ASL letter classifier, a small MLP trained on open datasets.
+- **Browser:** ONNX Runtime Web in Web Workers (WebGPU or WASM), plain HTML, CSS and JavaScript, hosted on GitHub Pages.
+- **Python:** uv, PyTorch, Ultralytics, scikit-learn, OpenCV and FastAPI to train, evaluate and export the models and
+  serve as the reference the browser is tested against.
+- **Quality and tooling:** pytest and Playwright browser tests, ruff, mypy, GitHub Actions CI, with Claude as an AI
+  coding assistant.
+
 ## Run it
 
 ```bash
